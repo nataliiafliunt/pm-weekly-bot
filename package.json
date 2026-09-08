@@ -1,0 +1,21 @@
+{
+  "name": "pm-weekly-report-bot",
+  "version": "1.0.0",
+  "description": "Slack-бот для трекинга еженедельных 2 часов на разработку/обучение в отделе PM",
+  "main": "src/app.js",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "start": "node src/app.js",
+    "dashboard": "node dashboard/server.js"
+  },
+  "dependencies": {
+    "@slack/bolt": "^3.19.0",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2",
+    "lowdb": "^1.0.0",
+    "node-cron": "^3.0.3",
+    "uuid": "^9.0.1"
+  }
+}

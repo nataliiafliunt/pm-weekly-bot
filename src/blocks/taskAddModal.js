@@ -1,0 +1,49 @@
+function buildTaskAddModal(employees) {
+  const employeeOptions = employees.map((e) => ({
+    text: { type: 'plain_text', text: e.name },
+    value: e.slackId
+  }));
+
+  return {
+    type: 'modal',
+    callback_id: 'task_add_submit',
+    title: { type: 'plain_text', text: 'Нове завдання' },
+    submit: { type: 'plain_text', text: 'Створити' },
+    close: { type: 'plain_text', text: 'Скасувати' },
+    blocks: [
+      {
+        type: 'input',
+        block_id: 'task_text',
+        label: { type: 'plain_text', text: 'Текст завдання' },
+        element: { type: 'plain_text_input', action_id: 'value', multiline: true }
+      },
+      {
+        type: 'input',
+        block_id: 'task_assignee',
+        label: { type: 'plain_text', text: 'Кому' },
+        element: {
+          type: 'static_select',
+          action_id: 'value',
+          placeholder: { type: 'plain_text', text: 'Оберіть співробітника' },
+          options: [
+            { text: { type: 'plain_text', text: 'Вся команда' }, value: 'all' },
+            ...employeeOptions
+          ]
+        }
+      },
+      {
+        type: 'input',
+        block_id: 'task_hours',
+        label: { type: 'plain_text', text: 'Орієнтовні години' },
+        element: {
+          type: 'number_input',
+          action_id: 'value',
+          is_decimal_allowed: true,
+          initial_value: '0.5'
+        }
+      }
+    ]
+  };
+}
+
+module.exports = { buildTaskAddModal };

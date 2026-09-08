@@ -1,0 +1,38 @@
+require('dotenv').config();
+const { App } = require('@slack/bolt');
+
+const { registerTaskAdd } = require('./commands/taskAdd');
+const { registerEmployeeAdd } = require('./commands/employees');
+const { registerWeeklyReport } = require('./commands/weeklyReport');
+const { registerTeamReport } = require('./commands/teamReport');
+const { registerAppAdd } = require('./commands/appAdd');
+const { registerAppImport } = require('./commands/appImport');
+const { registerAppSetStages } = require('./commands/appSetStages');
+const { registerAppProgress } = require('./commands/appProgress');
+const { registerAppList } = require('./commands/appList');
+const { startScheduler } = require('./scheduler');
+const { startDashboard } = require('./dashboardServer');
+
+const app = new App({
+  token: process.env.SLACK_BOT_TOKEN,
+  signingSecret: process.env.SLACK_SIGNING_SECRET,
+  socketMode: true,
+  appToken: process.env.SLACK_APP_TOKEN
+});
+
+registerTaskAdd(app);
+registerEmployeeAdd(app);
+registerWeeklyReport(app);
+registerTeamReport(app);
+registerAppAdd(app);
+registerAppImport(app);
+registerAppSetStages(app);
+registerAppProgress(app);
+registerAppList(app);
+
+(async () => {
+  await app.start();
+  startScheduler(app);
+  startDashboard();
+  console.log('PM weekly report bot запущено');
+})();
