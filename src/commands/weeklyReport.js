@@ -1,6 +1,6 @@
 const { v4: uuidv4 } = require('uuid');
 const db = require('../db');
-const { buildWeeklyReportModal } = require('../blocks/weeklyReportModal');
+const { buildWeeklyReportModal, CUSTOM_OPTION_VALUE } = require('../blocks/weeklyReportModal');
 const { hoursMinutesToHours, formatHoursDisplay } = require('../utils/parseHours');
 const { WEEKLY_PLAN_HOURS } = require('../config/planHours');
 const { formatWeekRangeLabel } = require('../config/dates');
@@ -22,7 +22,12 @@ function extractPrefill(values) {
 function getTasksFor(slackId, weekKey) {
   return db
     .get('tasks')
-    .filter((t) => t.weekKey === weekKey && (t.assignedTo === 'all' || t.assignedTo === slackId))
+    .filter(
+      (t) =>
+        t.weekKey === weekKey &&
+        (t.assignedTo === 'all' ||
+          (Array.isArray(t.assignedTo) && t.assignedTo.includes(slackId)))
+    )
     .value();
 }
 
@@ -32,10 +37,11 @@ function registerWeeklyReport(app) {
 
     const { weekKey } = JSON.parse(body.actions[0].value);
     const tasks = getTasksFor(body.user.id, weekKey);
+    const apps = db.get('apps').value();
 
     await client.views.open({
       trigger_id: body.trigger_id,
-      view: buildWeeklyReportModal(tasks, weekKey, 1, {})
+      view: buildWeeklyReportModal(tasks, weekKey, 1, {}, apps)
     });
   });
 
@@ -46,11 +52,27 @@ function registerWeeklyReport(app) {
     const newExtraCount = Math.min((meta.extraCount || 1) + 1, 3);
     const prefill = extractPrefill(body.view.state.values);
     const tasks = getTasksFor(body.user.id, meta.weekKey);
+    const apps = db.get('apps').value();
 
     await client.views.update({
       view_id: body.view.id,
       hash: body.view.hash,
-      view: buildWeeklyReportModal(tasks, meta.weekKey, newExtraCount, prefill)
+      view: buildWeeklyReportModal(tasks, meta.weekKey, newExtraCount, prefill, apps)
+    });
+  });
+
+  app.action({ action_id: 'value', block_id: /^extra_\d+_app_select$/ }, async ({ ack, body, client }) => {
+    await ack();
+
+    const meta = JSON.parse(body.view.private_metadata || '{}');
+    const prefill = extractPrefill(body.view.state.values);
+    const tasks = getTasksFor(body.user.id, meta.weekKey);
+    const apps = db.get('apps').value();
+
+    await client.views.update({
+      view_id: body.view.id,
+      hash: body.view.hash,
+      view: buildWeeklyReportModal(tasks, meta.weekKey, meta.extraCount || 1, prefill, apps)
     });
   });
 
@@ -63,9 +85,6 @@ function registerWeeklyReport(app) {
 
     const errors = {};
 
-    // Призначені завдання (від керівника/ментора) - Виконано? лишається
-    // обов'язковим (це і є "обов'язкове завдання" в звіті), причина
-    // обов'язкова тільки якщо відповідь "Ні".
     taskIds.forEach((id) => {
       const done = values[`task_${id}_done`]?.value?.selected_option?.value;
       const reason = values[`task_${id}_reason`]?.value?.value;
@@ -77,15 +96,23 @@ function registerWeeklyReport(app) {
       }
     });
 
-    // Додаткові завдання - повністю необов'язкові. Можна не заповнювати
-    // жодного і відправити звіт (напр. якщо тижня не було активності).
-    // Валідація лише на узгодженість: якщо вписав назву - вкажи і час, і навпаки.
+    const apps = db.get('apps').value();
+
     for (let i = 1; i <= extraCount; i += 1) {
-      const name = values[`extra_${i}_name`]?.value?.value?.trim();
+      const appSelectValue = values[`extra_${i}_app_select`]?.value?.selected_option?.value;
       const h = values[`extra_${i}_hours`]?.value?.value;
       const m = values[`extra_${i}_minutes`]?.value?.value;
-      if (name && !h && !m) errors[`extra_${i}_hours`] = 'Вкажи витрачений час для цього завдання';
-      if (!name && (h || m)) errors[`extra_${i}_name`] = 'Вкажи назву завдання';
+      const hasTime = h || m;
+
+      if (appSelectValue && appSelectValue !== CUSTOM_OPTION_VALUE) {
+        const stage = values[`extra_${i}_stage`]?.value?.selected_option?.value;
+        if (!stage) errors[`extra_${i}_stage`] = 'Обери етап для цього додатку';
+      } else if (appSelectValue === CUSTOM_OPTION_VALUE) {
+        const name = values[`extra_${i}_name`]?.value?.value?.trim();
+        if (!name) errors[`extra_${i}_name`] = 'Вкажи назву завдання';
+      } else if (hasTime) {
+        errors[`extra_${i}_app_select`] = 'Обери додаток або "Написати своє"';
+      }
     }
 
     if (Object.keys(errors).length > 0) {
@@ -109,14 +136,45 @@ function registerWeeklyReport(app) {
 
     const extraTasks = [];
     for (let i = 1; i <= extraCount; i += 1) {
-      const name = values[`extra_${i}_name`]?.value?.value?.trim();
-      if (!name) continue;
+      const appSelectValue = values[`extra_${i}_app_select`]?.value?.selected_option?.value;
+      if (!appSelectValue) continue;
+
       const hours = hoursMinutesToHours(
         values[`extra_${i}_hours`]?.value?.value,
         values[`extra_${i}_minutes`]?.value?.value
       );
-      totalHours += hours;
-      extraTasks.push({ name, hours });
+
+      if (appSelectValue === CUSTOM_OPTION_VALUE) {
+        const name = values[`extra_${i}_name`]?.value?.value?.trim();
+        if (!name) continue;
+        totalHours += hours;
+        extraTasks.push({ name, hours });
+      } else {
+        const appRecord = apps.find((a) => a.id === appSelectValue);
+        const stageId = values[`extra_${i}_stage`]?.value?.selected_option?.value;
+        const stage = appRecord?.stages.find((s) => s.id === stageId);
+        const paused = (values[`extra_${i}_paused`]?.value?.selected_options || []).length > 0;
+
+        totalHours += hours;
+        extraTasks.push({
+          name: `${appRecord ? appRecord.name : appSelectValue} → ${stage ? stage.name : ''}`,
+          hours,
+          appId: appSelectValue
+        });
+
+        db.get('appProgress')
+          .push({
+            id: uuidv4(),
+            appId: appSelectValue,
+            stageId,
+            employeeId: body.user.id,
+            note: null,
+            hours,
+            paused,
+            date: new Date().toISOString()
+          })
+          .write();
+      }
     }
 
     totalHours = Math.round(totalHours * 100) / 100;
