@@ -11,6 +11,7 @@ const { registerAppSetStages } = require('./commands/appSetStages');
 const { registerAppSetDefaultStages } = require('./commands/appSetDefaultStages');
 const { registerAppProgress } = require('./commands/appProgress');
 const { registerAppList } = require('./commands/appList');
+const { registerAppAssign } = require('./commands/appAssign');
 const { registerTestWeeklyReport } = require('./commands/testWeeklyReport');
 const { startScheduler } = require('./scheduler');
 const { startDashboard } = require('./dashboardServer');
@@ -32,6 +33,7 @@ registerAppSetStages(app);
 registerAppSetDefaultStages(app);
 registerAppProgress(app);
 registerAppList(app);
+registerAppAssign(app);
 registerTestWeeklyReport(app);
 
 (async () => {
