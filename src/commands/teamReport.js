@@ -3,22 +3,25 @@ const { getWeekRange, formatWeekRangeLabel } = require('../config/dates');
 const { WEEKLY_PLAN_HOURS } = require('../config/planHours');
 const { formatHoursDisplay } = require('../utils/parseHours');
 
+// Будує колонки динамічно - стільки блоків "Пріоритетне N" і "Завдання N",
+// скільки максимум завдань у будь-кого цього тижня. Використовується і для
+// тексту в чаті, і для CSV-файлу - структура однакова, щоб не було розбіжностей.
 function buildColumns(rowsData, maxPriority, maxExtra) {
   const columns = [
-    { key: 'name', label: 'ПМ', width: 20 },
-    { key: 'hoursDisplay', label: 'Всього годин', width: 15 },
-    { key: 'shortfallDisplay', label: 'Недопрацьовано', width: 16 }
+    { key: 'name', label: 'ПМ', width: 16 },
+    { key: 'hoursDisplay', label: 'Всього годин', width: 13 },
+    { key: 'shortfallDisplay', label: 'Недопрац.', width: 11 }
   ];
 
   for (let i = 1; i <= maxPriority; i += 1) {
-    columns.push({ key: `p${i}_name`, label: `Пріоритетне ${i}`, width: 22 });
-    columns.push({ key: `p${i}_plan`, label: `План ${i}`, width: 9 });
-    columns.push({ key: `p${i}_fact`, label: `Факт ${i}`, width: 9 });
-    columns.push({ key: `p${i}_reason`, label: `Причина ${i}`, width: 20 });
+    columns.push({ key: `p${i}_name`, label: `Пріоритетне ${i}`, width: 18 });
+    columns.push({ key: `p${i}_plan`, label: `План ${i}`, width: 7 });
+    columns.push({ key: `p${i}_fact`, label: `Факт ${i}`, width: 7 });
+    columns.push({ key: `p${i}_reason`, label: `Причина ${i}`, width: 16 });
   }
   for (let i = 1; i <= maxExtra; i += 1) {
-    columns.push({ key: `e${i}_name`, label: `Завдання ${i}`, width: 22 });
-    columns.push({ key: `e${i}_hours`, label: `Год ${i}`, width: 9 });
+    columns.push({ key: `e${i}_name`, label: `Завдання ${i}`, width: 18 });
+    columns.push({ key: `e${i}_hours`, label: `Год ${i}`, width: 7 });
   }
 
   return columns;
