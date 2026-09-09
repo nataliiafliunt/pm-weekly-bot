@@ -34,12 +34,25 @@ function buildTaskAddModal(employees) {
       {
         type: 'input',
         block_id: 'task_hours',
-        label: { type: 'plain_text', text: 'Орієнтовні години' },
+        label: { type: 'plain_text', text: 'Орієнтовно, годин' },
+        optional: true,
         element: {
           type: 'number_input',
           action_id: 'value',
-          is_decimal_allowed: true,
-          initial_value: '0.5'
+          is_decimal_allowed: false,
+          initial_value: '0'
+        }
+      },
+      {
+        type: 'input',
+        block_id: 'task_minutes',
+        label: { type: 'plain_text', text: 'Орієнтовно, хвилин' },
+        optional: true,
+        element: {
+          type: 'number_input',
+          action_id: 'value',
+          is_decimal_allowed: false,
+          initial_value: '30'
         }
       }
     ]
