@@ -19,9 +19,6 @@ function extractPrefill(values) {
   return prefill;
 }
 
-// Завдання діє в цьому тижні, якщо його діапазон [startDate, endDate]
-// перетинається з тижнем [weekStart, weekEnd]. Для старих завдань без цих
-// полів - фолбек на weekKey (як було раніше, тільки той тиждень).
 function isTaskActiveThisWeek(task, weekKey) {
   const weekStart = new Date(weekKey);
   const weekEnd = new Date(weekStart);
@@ -76,9 +73,7 @@ function registerWeeklyReport(app) {
     });
   });
 
-  // Вибір додатку у WIG PM Bots and Apps - перебудовуємо модалку, щоб
-  // показати етап/пауза/час саме для цього додатку.
-  app.action('wig_app_select', async ({ ack, body, client }) => {
+  app.action({ action_id: 'value', block_id: 'wig_app_select' }, async ({ ack, body, client }) => {
     await ack();
 
     const meta = JSON.parse(body.view.private_metadata || '{}');
@@ -102,8 +97,6 @@ function registerWeeklyReport(app) {
 
     const errors = {};
 
-    // Пріоритетні завдання - виконано? обов'язково, причина обов'язкова
-    // якщо "ні", і ЧАС ТЕПЕР ОБОВ'ЯЗКОВИЙ (потрібно точно знати, скільки пішло часу).
     taskIds.forEach((id) => {
       const done = values[`task_${id}_done`]?.value?.selected_option?.value;
       const reason = values[`task_${id}_reason`]?.value?.value;
@@ -121,7 +114,6 @@ function registerWeeklyReport(app) {
       }
     });
 
-    // WIG PM Bots and Apps - обов'язковий вибір
     const wigValue = values.wig_app_select?.value?.selected_option?.value;
     if (!wigValue) {
       errors.wig_app_select = "Обери додаток або познач, що не працював(ла) над додатками";
@@ -133,7 +125,6 @@ function registerWeeklyReport(app) {
       if (!wh && !wm) errors.wig_hours = 'Вкажи, скільки часу витрачено';
     }
 
-    // Прості додаткові завдання - повністю необов'язкові, але узгоджені
     for (let i = 1; i <= simpleExtraCount; i += 1) {
       const name = values[`extra_${i}_name`]?.value?.value?.trim();
       const h = values[`extra_${i}_hours`]?.value?.value;
@@ -165,16 +156,15 @@ function registerWeeklyReport(app) {
 
     const extraTasks = [];
 
-    // WIG PM Bots and Apps
     if (wigValue !== WIG_NONE_VALUE) {
       const appRecord = apps.find((a) => a.id === wigValue);
       const stageId = values.wig_stage.value.selected_option.value;
       const stage = appRecord?.stages.find((s) => s.id === stageId);
-      const paused = (values.wig_paused?.value?.selected_options || []).length > 0;
       const hours = hoursMinutesToHours(
         values.wig_hours?.value?.value,
         values.wig_minutes?.value?.value
       );
+      const paused = hours === 0;
 
       totalHours += hours;
       extraTasks.push({
@@ -197,7 +187,6 @@ function registerWeeklyReport(app) {
         .write();
     }
 
-    // Прості додаткові завдання
     for (let i = 1; i <= simpleExtraCount; i += 1) {
       const name = values[`extra_${i}_name`]?.value?.value?.trim();
       if (!name) continue;
