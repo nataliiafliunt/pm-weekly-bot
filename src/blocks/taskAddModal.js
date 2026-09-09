@@ -57,6 +57,23 @@ function buildTaskAddModal(employees) {
       },
       {
         type: 'input',
+        block_id: 'task_recurrence',
+        label: { type: 'plain_text', text: 'Коли запитувати в тижневому звіті' },
+        element: {
+          type: 'radio_buttons',
+          action_id: 'value',
+          initial_option: {
+            text: { type: 'plain_text', text: 'Тільки тиждень дедлайну' },
+            value: 'deadline_only'
+          },
+          options: [
+            { text: { type: 'plain_text', text: 'Тільки тиждень дедлайну' }, value: 'deadline_only' },
+            { text: { type: 'plain_text', text: 'Кожен тиждень до дедлайну' }, value: 'weekly' }
+          ]
+        }
+      },
+      {
+        type: 'input',
         block_id: 'task_hours',
         label: { type: 'plain_text', text: 'Орієнтовно, годин' },
         optional: true,
