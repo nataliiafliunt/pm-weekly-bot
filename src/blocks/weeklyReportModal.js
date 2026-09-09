@@ -1,7 +1,14 @@
+// Форма тижневого звіту.
+// 1. Пріоритетні завдання (від керівника) - Виконано? + години/хвилини (обов'язково) + причина.
+// 2. WIG PM Bots and Apps - ОБОВ'ЯЗКОВИЙ блок: обираєш додаток (або "не працював
+//    над додатками") + етап + паузу + години/хвилини.
+// 3. Додаткові прості завдання (кнопка "+ Додати ще завдання", до 2 штук) -
+//    просто назва (вільний текст) + години/хвилини, без вибору додатку.
+
 const { formatWeekRangeLabel } = require('../config/dates');
 const { formatHoursDisplay } = require('../utils/parseHours');
 
-const CUSTOM_OPTION_VALUE = '__custom__';
+const WIG_NONE_VALUE = '__none__';
 
 function timeFields(prefix, prefill) {
   return [
@@ -32,7 +39,7 @@ function timeFields(prefix, prefill) {
   ];
 }
 
-function buildWeeklyReportModal(tasks, weekKey, extraCount = 1, prefill = {}, apps = []) {
+function buildWeeklyReportModal(tasks, weekKey, simpleExtraCount = 0, prefill = {}, apps = []) {
   const weekLabel = formatWeekRangeLabel(weekKey);
 
   const blocks = [
@@ -45,13 +52,14 @@ function buildWeeklyReportModal(tasks, weekKey, extraCount = 1, prefill = {}, ap
     }
   ];
 
+  // ---- 1. Пріоритетні завдання ----
   tasks.forEach((task) => {
     blocks.push({ type: 'divider' });
     blocks.push({
       type: 'section',
       text: {
         type: 'mrkdwn',
-        text: `*Завдання:* ${task.text}\n_План: ${formatHoursDisplay(task.hours)}_`
+        text: `*Пріоритетне завдання:* ${task.text}\n_Розрахована кількість часу: ${formatHoursDisplay(task.hours)}_`
       }
     });
     blocks.push({
@@ -91,89 +99,93 @@ function buildWeeklyReportModal(tasks, weekKey, extraCount = 1, prefill = {}, ap
     });
   });
 
+  // ---- 2. WIG PM Bots and Apps (обов'язково) ----
   blocks.push({ type: 'divider' });
   blocks.push({
     type: 'section',
-    text: { type: 'mrkdwn', text: '*Витрачений час на навчання або розробку цього тижня*' }
+    text: { type: 'mrkdwn', text: '*WIG PM Bots and Apps* (обов\'язково)' }
   });
 
-  const appOptions = [
+  const wigOptions = [
     ...apps.map((a) => ({ text: { type: 'plain_text', text: a.name }, value: a.id })),
-    { text: { type: 'plain_text', text: "Написати своє завдання" }, value: CUSTOM_OPTION_VALUE }
+    { text: { type: 'plain_text', text: 'Не працював(ла) над додатками цього тижня' }, value: WIG_NONE_VALUE }
   ];
+  const wigSelected = prefill?.wig_app_select;
+  const wigApp = apps.find((a) => a.id === wigSelected);
 
-  for (let i = 1; i <= extraCount; i += 1) {
-    const selectedAppValue = prefill?.[`extra_${i}_app_select`];
-    const selectedApp = apps.find((a) => a.id === selectedAppValue);
+  blocks.push({
+    type: 'input',
+    block_id: 'wig_app_select',
+    dispatch_action: true,
+    label: { type: 'plain_text', text: 'Додаток' },
+    element: {
+      type: 'static_select',
+      action_id: 'value',
+      placeholder: { type: 'plain_text', text: 'Оберіть додаток' },
+      initial_option: wigSelected ? wigOptions.find((o) => o.value === wigSelected) : undefined,
+      options: wigOptions
+    }
+  });
+
+  if (wigApp) {
+    const stageOptions = wigApp.stages.map((s) => ({
+      text: { type: 'plain_text', text: s.name },
+      value: s.id
+    }));
+    const wigStageSelected = prefill?.wig_stage;
 
     blocks.push({
       type: 'input',
-      block_id: `extra_${i}_app_select`,
-      dispatch_action: true,
-      optional: true,
-      label: { type: 'plain_text', text: `Завдання ${i} - WIG PM Bots and Apps або своє` },
+      block_id: 'wig_stage',
+      label: { type: 'plain_text', text: `На якому етапі зараз "${wigApp.name}"` },
       element: {
         type: 'static_select',
         action_id: 'value',
-        placeholder: { type: 'plain_text', text: 'Оберіть додаток або "Написати своє"' },
-        initial_option: selectedAppValue
-          ? appOptions.find((o) => o.value === selectedAppValue)
-          : undefined,
-        options: appOptions
+        initial_option: wigStageSelected ? stageOptions.find((o) => o.value === wigStageSelected) : undefined,
+        options: stageOptions
       }
     });
 
-    if (selectedApp) {
-      const stageOptions = selectedApp.stages.map((s) => ({
-        text: { type: 'plain_text', text: s.name },
-        value: s.id
-      }));
-      const selectedStage = prefill?.[`extra_${i}_stage`];
+    blocks.push({
+      type: 'input',
+      block_id: 'wig_paused',
+      optional: true,
+      label: { type: 'plain_text', text: ' ' },
+      element: {
+        type: 'checkboxes',
+        action_id: 'value',
+        options: [{ text: { type: 'plain_text', text: 'Наразі на паузі' }, value: 'paused' }]
+      }
+    });
 
-      blocks.push({
-        type: 'input',
-        block_id: `extra_${i}_stage`,
-        optional: true,
-        label: { type: 'plain_text', text: `На якому етапі зараз "${selectedApp.name}"` },
-        element: {
-          type: 'static_select',
-          action_id: 'value',
-          initial_option: selectedStage
-            ? stageOptions.find((o) => o.value === selectedStage)
-            : undefined,
-          options: stageOptions
-        }
-      });
+    blocks.push(...timeFields('wig', prefill));
+  }
 
-      blocks.push({
-        type: 'input',
-        block_id: `extra_${i}_paused`,
-        optional: true,
-        label: { type: 'plain_text', text: ' ' },
-        element: {
-          type: 'checkboxes',
-          action_id: 'value',
-          options: [{ text: { type: 'plain_text', text: 'Наразі на паузі' }, value: 'paused' }]
-        }
-      });
-    } else if (selectedAppValue === CUSTOM_OPTION_VALUE || !selectedAppValue) {
-      blocks.push({
-        type: 'input',
-        block_id: `extra_${i}_name`,
-        optional: true,
-        label: { type: 'plain_text', text: 'Що було зроблено' },
-        element: {
-          type: 'plain_text_input',
-          action_id: 'value',
-          initial_value: prefill?.[`extra_${i}_name`] ?? undefined
-        }
-      });
-    }
+  // ---- 3. Прості додаткові завдання ----
+  if (simpleExtraCount > 0) {
+    blocks.push({ type: 'divider' });
+    blocks.push({
+      type: 'section',
+      text: { type: 'mrkdwn', text: '*Додаткові завдання*' }
+    });
+  }
 
+  for (let i = 1; i <= simpleExtraCount; i += 1) {
+    blocks.push({
+      type: 'input',
+      block_id: `extra_${i}_name`,
+      optional: true,
+      label: { type: 'plain_text', text: `Завдання ${i} - назва` },
+      element: {
+        type: 'plain_text_input',
+        action_id: 'value',
+        initial_value: prefill?.[`extra_${i}_name`] ?? undefined
+      }
+    });
     blocks.push(...timeFields(`extra_${i}`, prefill));
   }
 
-  if (extraCount < 3) {
+  if (simpleExtraCount < 2) {
     blocks.push({
       type: 'actions',
       block_id: 'add_extra_task_block',
@@ -182,7 +194,7 @@ function buildWeeklyReportModal(tasks, weekKey, extraCount = 1, prefill = {}, ap
           type: 'button',
           action_id: 'add_extra_task',
           text: { type: 'plain_text', text: '+ Додати ще завдання' },
-          value: String(extraCount)
+          value: String(simpleExtraCount)
         }
       ]
     });
@@ -191,7 +203,7 @@ function buildWeeklyReportModal(tasks, weekKey, extraCount = 1, prefill = {}, ap
   return {
     type: 'modal',
     callback_id: 'weekly_report_submit',
-    private_metadata: JSON.stringify({ taskIds: tasks.map((t) => t.id), weekKey, extraCount }),
+    private_metadata: JSON.stringify({ taskIds: tasks.map((t) => t.id), weekKey, simpleExtraCount }),
     title: { type: 'plain_text', text: 'Тижневий звіт' },
     submit: { type: 'plain_text', text: 'Надіслати' },
     close: { type: 'plain_text', text: 'Скасувати' },
@@ -199,4 +211,4 @@ function buildWeeklyReportModal(tasks, weekKey, extraCount = 1, prefill = {}, ap
   };
 }
 
-module.exports = { buildWeeklyReportModal, CUSTOM_OPTION_VALUE };
+module.exports = { buildWeeklyReportModal, WIG_NONE_VALUE };
