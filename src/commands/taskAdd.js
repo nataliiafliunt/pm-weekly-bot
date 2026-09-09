@@ -32,14 +32,20 @@ function registerTaskAdd(app) {
     const assignee = selected.includes('all') ? 'all' : selected;
     const hours = hoursMinutesToHours(values.task_hours.value.value, values.task_minutes.value.value);
 
-    const week = getWeekRange();
+    const startDate = values.task_start_date.value.selected_date;
+    // Якщо кінець не вказано - завдання діє тільки той тиждень, до якого належить startDate
+    const endDate = values.task_end_date?.value?.selected_date || startDate;
+
+    const week = getWeekRange(new Date(startDate));
 
     const task = {
       id: uuidv4(),
       text,
       assignedTo: assignee,
       hours,
-      weekKey: week.key,
+      startDate,
+      endDate,
+      weekKey: week.key, // залишено для сумісності зі старими звітами
       createdBy: body.user.id,
       createdAt: new Date().toISOString()
     };
@@ -50,11 +56,13 @@ function registerTaskAdd(app) {
     const targets =
       assignee === 'all' ? employees : employees.filter((e) => assignee.includes(e.slackId));
 
+    const deadlineText = endDate !== startDate ? ` (з ${startDate} по ${endDate})` : '';
+
     for (const emp of targets) {
       try {
         await client.chat.postMessage({
           channel: emp.slackId,
-          text: `Тобі призначено нове завдання на цей тиждень: «${text}» (${hours} год). Звіт по ньому потрібно буде заповнити наприкінці тижня.`
+          text: `Тобі призначено нове завдання: «${text}» (${hours} год)${deadlineText}. Воно буде з'являтись у тижневому звіті, поки не закінчиться дедлайн.`
         });
       } catch (err) {
         console.error(`Не вдалося написати ${emp.name}:`, err.message);
