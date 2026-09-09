@@ -10,23 +10,35 @@ function registerEmployeeAdd(app) {
     });
   });
 
-  app.view('employee_add_submit', async ({ ack, view, respond, client, body }) => {
+  app.view('employee_add_submit', async ({ ack, view, client, body }) => {
     await ack();
 
     const values = view.state.values;
-    const slackId = values.employee_user.value.selected_user;
-    const name = values.employee_name.value.value.trim();
+    const slackIds = values.employee_users.value.selected_users;
 
-    const existing = db.get('employees').find({ slackId }).value();
-    if (existing) {
-      db.get('employees').find({ slackId }).assign({ name }).write();
-    } else {
-      db.get('employees').push({ slackId, name }).write();
+    const addedNames = [];
+
+    for (const slackId of slackIds) {
+      let name = slackId;
+      try {
+        const info = await client.users.info({ user: slackId });
+        name = info.user.profile.real_name || info.user.real_name || info.user.name || slackId;
+      } catch (err) {
+        console.error(`Не вдалося отримати профіль ${slackId}:`, err.message);
+      }
+
+      const existing = db.get('employees').find({ slackId }).value();
+      if (existing) {
+        db.get('employees').find({ slackId }).assign({ name }).write();
+      } else {
+        db.get('employees').push({ slackId, name }).write();
+      }
+      addedNames.push(name);
     }
 
     await client.chat.postMessage({
       channel: body.user.id,
-      text: existing ? `Оновлено: ${name}` : `Додано співробітника: ${name}`
+      text: `Додано/оновлено ${addedNames.length} співробітник(ів):\n${addedNames.map((n) => `• ${n}`).join('\n')}`
     });
   });
 
