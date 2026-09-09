@@ -1,10 +1,3 @@
-// Строит форму еженедельного отчёта.
-// Для каждого назначенного на неделю задания: Виконано? (так/ні) + години + причина (если "ні").
-// Плюс обязательный блок "які ще завдання були виконані цього тижня" + години.
-// Slack-модалки не поддерживают живой JS-расчёт суммы внутри формы,
-// поэтому итоговая сумма считается на сервере при отправке (см. weeklyReport.js)
-// и показывается пользователю в подтверждении после сабмита.
-
 function buildWeeklyReportModal(tasks, weekKey) {
   const blocks = [
     {
@@ -41,11 +34,10 @@ function buildWeeklyReportModal(tasks, weekKey) {
     blocks.push({
       type: 'input',
       block_id: `task_${task.id}_hours`,
-      label: { type: 'plain_text', text: 'Витрачено, год' },
+      label: { type: 'plain_text', text: 'Витрачено (год або хв, напр. "90 хв")' },
       element: {
-        type: 'number_input',
+        type: 'plain_text_input',
         action_id: 'value',
-        is_decimal_allowed: true,
         initial_value: String(task.hours)
       }
     });
@@ -60,22 +52,26 @@ function buildWeeklyReportModal(tasks, weekKey) {
 
   blocks.push({ type: 'divider' });
   blocks.push({
-    type: 'input',
-    block_id: 'extra_tasks_text',
-    label: { type: 'plain_text', text: 'Які ще завдання були виконані цього тижня' },
-    element: { type: 'plain_text_input', action_id: 'value', multiline: true }
+    type: 'section',
+    text: { type: 'mrkdwn', text: '*Додаткові завдання цього тижня* (мінімум одне)' }
   });
-  blocks.push({
-    type: 'input',
-    block_id: 'extra_tasks_hours',
-    label: { type: 'plain_text', text: 'Витрачено, год' },
-    element: {
-      type: 'number_input',
-      action_id: 'value',
-      is_decimal_allowed: true,
-      initial_value: '0'
-    }
-  });
+
+  for (let i = 1; i <= 3; i += 1) {
+    blocks.push({
+      type: 'input',
+      block_id: `extra_${i}_name`,
+      optional: i !== 1,
+      label: { type: 'plain_text', text: `Завдання ${i} - що було зроблено` },
+      element: { type: 'plain_text_input', action_id: 'value' }
+    });
+    blocks.push({
+      type: 'input',
+      block_id: `extra_${i}_hours`,
+      optional: i !== 1,
+      label: { type: 'plain_text', text: 'Скільки часу витрачено (год або хв)' },
+      element: { type: 'plain_text_input', action_id: 'value', placeholder: { type: 'plain_text', text: 'напр. 1.5 або 90 хв' } }
+    });
+  }
 
   return {
     type: 'modal',
