@@ -2,7 +2,7 @@
 <html lang="uk">
 <head>
 <meta charset="UTF-8" />
-<title>Прогрес по додатках</title>
+<title>WIG PM Bots and Apps Gantt</title>
 <style>
   * { box-sizing: border-box; }
   body {
@@ -32,16 +32,10 @@
     overflow: hidden; white-space: nowrap;
   }
   .segment .people { position: absolute; top: -16px; left: 8px; font-size: 11px; color: #9B9A96; white-space: nowrap; }
-  .stripes {
-    background-image: repeating-linear-gradient(
-      45deg, transparent, transparent 4px,
-      rgba(0,0,0,0.10) 4px, rgba(0,0,0,0.10) 8px
-    );
-  }
 </style>
 </head>
 <body>
-  <h1>Прогрес по додатках</h1>
+  <h1>WIG PM Bots and Apps Gantt</h1>
   <p class="subtitle" id="subtitle">Завантаження...</p>
   <div id="content"></div>
 
@@ -60,7 +54,6 @@ async function load() {
 
   subtitle.textContent = data.rangeStart + ' — ' + data.rangeEnd;
 
-  // Ось по днях, підпис - раз на N днів, щоб не було затісно
   const step = Math.max(Math.ceil(data.totalDays / 20), 1);
   let axisHtml = '<div class="axis">';
   for (let d = 0; d <= data.totalDays; d += step) {
@@ -89,11 +82,10 @@ async function load() {
         app.segments.forEach((seg, idx) => {
           const radiusLeft = idx === 0 ? '8px' : '0';
           const radiusRight = idx === app.segments.length - 1 ? '8px' : '0';
-          const stripeClass = seg.paused ? ' stripes' : '';
           const peopleHtml = seg.employees.length
             ? '<div class="people">' + escapeHtml(seg.employees.join(', ')) + '</div>'
             : '';
-          html += '<div class="segment' + stripeClass + '" style="left:' + seg.leftPct + '%; width:' + seg.widthPct + '%; ' +
+          html += '<div class="segment" style="left:' + seg.leftPct + '%; width:' + seg.widthPct + '%; ' +
             'border-radius:' + radiusLeft + ' ' + radiusRight + ' ' + radiusRight + ' ' + radiusLeft + ';' +
             'background:' + seg.color.bg + '; color:' + seg.color.text + ';">' +
             escapeHtml(seg.stageName) + peopleHtml +
