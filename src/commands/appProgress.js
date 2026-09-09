@@ -25,7 +25,7 @@ function registerAppProgress(app) {
   });
 
   // Крок 1 -> крок 2: користувач обрав додаток, підміняємо модалку на етапи саме цього додатку
-  app.action('select_app', async ({ ack, body, client, action }) => {
+  app.action('select_app_action', async ({ ack, body, client, action }) => {
     await ack();
 
     const appId = action.selected_option.value;
