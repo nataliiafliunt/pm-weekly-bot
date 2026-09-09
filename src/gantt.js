@@ -1,9 +1,5 @@
-// Перетворює appProgress (точкові записи "коли на якому етапі") в непрервні
-// сегменти для таймлайну, з точністю до дня. Кожен запис - це момент переходу
-// на новий етап (або оновлення статусу паузи); сегмент триває від цього дня
-// до наступного запису (або до сьогодні, якщо це останній запис).
-
-const { colorForStageIndex } = require('./config/colors');
+const GREEN = { bg: '#E1F5EE', text: '#085041' };
+const RED = { bg: '#FAECE7', text: '#9B2B0E' };
 
 function dayKey(isoDate) {
   return isoDate.slice(0, 10);
@@ -62,9 +58,8 @@ function buildGanttData(db) {
       const startOffset = daysBetween(rangeStart, day);
       const endOffset = Math.max(daysBetween(rangeStart, nextDay), startOffset + 1);
 
-      const stageIndex = appRecord.stages.findIndex((s) => s.id === info.stageId);
       const stage = appRecord.stages.find((s) => s.id === info.stageId);
-      const color = colorForStageIndex(stageIndex >= 0 ? stageIndex : 0);
+      const color = info.paused ? RED : GREEN;
 
       return {
         stageName: stage ? stage.name : '—',
