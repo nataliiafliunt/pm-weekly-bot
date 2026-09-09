@@ -1,8 +1,7 @@
 const db = require('../db');
 const { getWeekRange } = require('../config/dates');
+const { WEEKLY_PLAN_HOURS } = require('../config/planHours');
 
-// /team-report - сводка за текущую неделю
-// /team-report 2026-09-01 - сводка за конкретную неделю (ключ = дата понедельника)
 function registerTeamReport(app) {
   app.command('/team-report', async ({ ack, respond, command }) => {
     await ack();
@@ -11,35 +10,52 @@ function registerTeamReport(app) {
     const weekKey = command.text.trim() || currentWeek.key;
 
     const employees = db.get('employees').value();
+    const tasks = db.get('tasks').value();
     const reports = db.get('reports').filter({ weekKey }).value();
 
-    let totalAll = 0;
-    const rows = employees.map((emp) => {
+    let totalShortfall = 0;
+    const blocks = [];
+
+    employees.forEach((emp) => {
       const report = reports.find((r) => r.employeeId === emp.slackId);
 
       if (!report) {
-        return `${emp.name.padEnd(15)} не відповів(ла)`;
+        totalShortfall += WEEKLY_PLAN_HOURS;
+        blocks.push(`*${emp.name}* — не відповів(ла)  _(-${WEEKLY_PLAN_HOURS} год до плану)_`);
+        return;
       }
 
-      totalAll += report.totalHours;
+      const lines = [`*${emp.name}*`];
 
-      let status = '—';
-      if (report.taskResults.length > 0) {
-        const allDone = report.taskResults.every((t) => t.done === 'yes');
-        status = allDone ? 'виконано' : 'не все виконано';
+      report.taskResults.forEach((tr) => {
+        const task = tasks.find((t) => t.id === tr.taskId);
+        const taskText = task ? task.text : 'Завдання';
+        const doneMark = tr.done === 'yes' ? '✅' : '❌';
+        lines.push(`  ${doneMark} ${taskText} — ${tr.hours} год${tr.reason ? ` (${tr.reason})` : ''}`);
+      });
+
+      (report.extraTasks || []).forEach((et) => {
+        lines.push(`  • ${et.name} — ${et.hours} год`);
+      });
+
+      lines.push(`  Разом: *${report.totalHours} год*`);
+
+      if (report.shortfallHours > 0) {
+        lines.push(`  Недопрацьовано: *${report.shortfallHours} год*`);
+        totalShortfall += report.shortfallHours;
+      } else {
+        lines.push('  План виконано ✅');
       }
 
-      return `${emp.name.padEnd(15)} ${status.padEnd(18)} ${report.totalHours} год`;
+      blocks.push(lines.join('\n'));
     });
 
-    totalAll = Math.round(totalAll * 10) / 10;
+    totalShortfall = Math.round(totalShortfall * 100) / 100;
 
     const text =
-      `*Звіт за тиждень ${weekKey}*\n` +
-      '```\n' +
-      rows.join('\n') +
-      `\n\nРазом: ${totalAll} год\n` +
-      '```';
+      `*Звіт за тиждень ${weekKey}*\n\n` +
+      blocks.join('\n\n') +
+      `\n\n*Загалом недопрацьовано на всіх: ${totalShortfall} год*`;
 
     await respond({ text, response_type: 'in_channel' });
   });
