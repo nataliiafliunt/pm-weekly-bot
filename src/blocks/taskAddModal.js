@@ -20,11 +20,11 @@ function buildTaskAddModal(employees) {
       {
         type: 'input',
         block_id: 'task_assignee',
-        label: { type: 'plain_text', text: 'Кому' },
+        label: { type: 'plain_text', text: 'Кому (можна обрати декількох)' },
         element: {
-          type: 'static_select',
+          type: 'multi_static_select',
           action_id: 'value',
-          placeholder: { type: 'plain_text', text: 'Оберіть співробітника' },
+          placeholder: { type: 'plain_text', text: 'Оберіть одного чи декількох' },
           options: [
             { text: { type: 'plain_text', text: 'Вся команда' }, value: 'all' },
             ...employeeOptions
