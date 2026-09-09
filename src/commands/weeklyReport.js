@@ -1,6 +1,6 @@
 const { v4: uuidv4 } = require('uuid');
 const db = require('../db');
-const { buildWeeklyReportModal, WIG_NONE_VALUE } = require('../blocks/weeklyReportModal');
+const { buildWeeklyReportModal } = require('../blocks/weeklyReportModal');
 const { hoursMinutesToHours, formatHoursDisplay } = require('../utils/parseHours');
 const { WEEKLY_PLAN_HOURS } = require('../config/planHours');
 const { formatWeekRangeLabel, getWeekRange } = require('../config/dates');
@@ -19,15 +19,16 @@ function extractPrefill(values) {
   return prefill;
 }
 
+// Завдання показується РІВНО в одному тижні - тому, де знаходиться дедлайн
+// (endDate). Старт потрібен лише для довідки, не для повторів кожен тиждень.
 function isTaskActiveThisWeek(task, weekKey) {
   const weekStart = new Date(weekKey);
   const weekEnd = new Date(weekStart);
   weekEnd.setDate(weekStart.getDate() + 6);
 
-  const taskStart = new Date(task.startDate || task.weekKey);
-  const taskEnd = new Date(task.endDate || task.startDate || task.weekKey);
+  const deadline = new Date(task.endDate || task.startDate || task.weekKey);
 
-  return taskStart <= weekEnd && taskEnd >= weekStart;
+  return deadline >= weekStart && deadline <= weekEnd;
 }
 
 function getTasksFor(slackId, weekKey) {
@@ -42,17 +43,25 @@ function getTasksFor(slackId, weekKey) {
     .value();
 }
 
+// Додатки, де ця людина є відповідальною - саме вони підуть у WIG-блок форми.
+function getMyApps(slackId) {
+  return db
+    .get('apps')
+    .filter((a) => Array.isArray(a.assignees) && a.assignees.includes(slackId))
+    .value();
+}
+
 function registerWeeklyReport(app) {
   app.action('open_weekly_report', async ({ ack, body, client }) => {
     await ack();
 
     const { weekKey } = JSON.parse(body.actions[0].value);
     const tasks = getTasksFor(body.user.id, weekKey);
-    const apps = db.get('apps').value();
+    const myApps = getMyApps(body.user.id);
 
     await client.views.open({
       trigger_id: body.trigger_id,
-      view: buildWeeklyReportModal(tasks, weekKey, 0, {}, apps)
+      view: buildWeeklyReportModal(tasks, weekKey, 0, {}, myApps)
     });
   });
 
@@ -63,28 +72,14 @@ function registerWeeklyReport(app) {
     const newCount = Math.min((meta.simpleExtraCount || 0) + 1, 2);
     const prefill = extractPrefill(body.view.state.values);
     const week = getWeekRange();
-    const tasks = getTasksFor(body.user.id, meta.weekKey || week.key);
-    const apps = db.get('apps').value();
+    const weekKey = meta.weekKey || week.key;
+    const tasks = getTasksFor(body.user.id, weekKey);
+    const myApps = getMyApps(body.user.id);
 
     await client.views.update({
       view_id: body.view.id,
       hash: body.view.hash,
-      view: buildWeeklyReportModal(tasks, meta.weekKey, newCount, prefill, apps)
-    });
-  });
-
-  app.action({ action_id: 'value', block_id: 'wig_app_select' }, async ({ ack, body, client }) => {
-    await ack();
-
-    const meta = JSON.parse(body.view.private_metadata || '{}');
-    const prefill = extractPrefill(body.view.state.values);
-    const tasks = getTasksFor(body.user.id, meta.weekKey);
-    const apps = db.get('apps').value();
-
-    await client.views.update({
-      view_id: body.view.id,
-      hash: body.view.hash,
-      view: buildWeeklyReportModal(tasks, meta.weekKey, meta.simpleExtraCount || 0, prefill, apps)
+      view: buildWeeklyReportModal(tasks, weekKey, newCount, prefill, myApps)
     });
   });
 
@@ -93,6 +88,7 @@ function registerWeeklyReport(app) {
     const meta = JSON.parse(view.private_metadata || '{}');
     const taskIds = meta.taskIds || [];
     const simpleExtraCount = meta.simpleExtraCount || 0;
+    const myAppIds = meta.myAppIds || [];
     const weekKey = meta.weekKey;
 
     const errors = {};
@@ -114,16 +110,14 @@ function registerWeeklyReport(app) {
       }
     });
 
-    const wigValue = values.wig_app_select?.value?.selected_option?.value;
-    if (!wigValue) {
-      errors.wig_app_select = "Обери додаток або познач, що не працював(ла) над додатками";
-    } else if (wigValue !== WIG_NONE_VALUE) {
-      const stage = values.wig_stage?.value?.selected_option?.value;
-      const wh = values.wig_hours?.value?.value;
-      const wm = values.wig_minutes?.value?.value;
-      if (!stage) errors.wig_stage = 'Обери етап';
-      if (!wh && !wm) errors.wig_hours = 'Вкажи, скільки часу витрачено';
-    }
+    // Кожен призначений додаток - обов'язково етап + час (0/0 = пауза)
+    myAppIds.forEach((appId) => {
+      const stage = values[`wig_${appId}_stage`]?.value?.selected_option?.value;
+      const h = values[`wig_${appId}_hours`]?.value?.value;
+      const m = values[`wig_${appId}_minutes`]?.value?.value;
+      if (!stage) errors[`wig_${appId}_stage`] = 'Обери етап';
+      if (!h && !m) errors[`wig_${appId}_hours`] = 'Вкажи, скільки часу витрачено (навіть 0)';
+    });
 
     for (let i = 1; i <= simpleExtraCount; i += 1) {
       const name = values[`extra_${i}_name`]?.value?.value?.trim();
@@ -156,27 +150,27 @@ function registerWeeklyReport(app) {
 
     const extraTasks = [];
 
-    if (wigValue !== WIG_NONE_VALUE) {
-      const appRecord = apps.find((a) => a.id === wigValue);
-      const stageId = values.wig_stage.value.selected_option.value;
+    myAppIds.forEach((appId) => {
+      const appRecord = apps.find((a) => a.id === appId);
+      const stageId = values[`wig_${appId}_stage`].value.selected_option.value;
       const stage = appRecord?.stages.find((s) => s.id === stageId);
       const hours = hoursMinutesToHours(
-        values.wig_hours?.value?.value,
-        values.wig_minutes?.value?.value
+        values[`wig_${appId}_hours`]?.value?.value,
+        values[`wig_${appId}_minutes`]?.value?.value
       );
       const paused = hours === 0;
 
       totalHours += hours;
       extraTasks.push({
-        name: `${appRecord ? appRecord.name : wigValue} → ${stage ? stage.name : ''}`,
+        name: `${appRecord ? appRecord.name : appId} → ${stage ? stage.name : ''}`,
         hours,
-        appId: wigValue
+        appId
       });
 
       db.get('appProgress')
         .push({
           id: uuidv4(),
-          appId: wigValue,
+          appId,
           stageId,
           employeeId: body.user.id,
           note: null,
@@ -185,7 +179,7 @@ function registerWeeklyReport(app) {
           date: new Date().toISOString()
         })
         .write();
-    }
+    });
 
     for (let i = 1; i <= simpleExtraCount; i += 1) {
       const name = values[`extra_${i}_name`]?.value?.value?.trim();
