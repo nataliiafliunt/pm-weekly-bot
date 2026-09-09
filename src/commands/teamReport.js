@@ -76,17 +76,16 @@ function registerTeamReport(app) {
     totalShortfall = Math.round(totalShortfall * 100) / 100;
     totalHours = Math.round(totalHours * 100) / 100;
 
-    const nameW = 20;
-    const hoursW = 12;
-    const shortW = 12;
-    const mandW = 11;
+    const nameW = 22;
+    const hoursW = 14;
+    const shortW = 24;
+    const mandW = 22;
 
     const pad = (s, w) => String(s).padEnd(w);
-    const header = `${pad('ПМ', nameW)} ${pad('Години', hoursW)} ${pad('Недопрац.', shortW)} ${pad("Обов'язк.", mandW)} Причина`;
+    const header = `${pad('ПМ', nameW)} ${pad('Години', hoursW)} ${pad('Недопрацьовані години', shortW)} ${pad("Обов'язкове завдання", mandW)} Причина невиконання`;
 
     const lines = rowsData.map((r) => {
-      const name = r.name.length > nameW - 1 ? r.name.slice(0, nameW - 2) + '…' : r.name;
-      return `${pad(name, nameW)} ${pad(r.hoursDisplay, hoursW)} ${pad(r.shortfallDisplay, shortW)} ${pad(r.mandatory, mandW)} ${r.reason}`;
+      return `${pad(r.name, nameW)} ${pad(r.hoursDisplay, hoursW)} ${pad(r.shortfallDisplay, shortW)} ${pad(r.mandatory, mandW)} ${r.reason}`;
     });
 
     const text =
@@ -100,7 +99,6 @@ function registerTeamReport(app) {
 
     await respond({ text, response_type: 'in_channel' });
 
-    // Файл для завантаження - повна версія у CSV, можна відкрити в Excel/Google Sheets
     try {
       const csv = buildCsv(rowsData);
       await client.files.uploadV2({
