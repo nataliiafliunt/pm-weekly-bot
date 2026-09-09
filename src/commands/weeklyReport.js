@@ -1,7 +1,7 @@
 const { v4: uuidv4 } = require('uuid');
 const db = require('../db');
 const { buildWeeklyReportModal } = require('../blocks/weeklyReportModal');
-const { hoursMinutesToHours } = require('../utils/parseHours');
+const { hoursMinutesToHours, formatHoursDisplay } = require('../utils/parseHours');
 const { WEEKLY_PLAN_HOURS } = require('../config/planHours');
 const { formatWeekRangeLabel } = require('../config/dates');
 
@@ -63,6 +63,9 @@ function registerWeeklyReport(app) {
 
     const errors = {};
 
+    // Призначені завдання (від керівника/ментора) - Виконано? лишається
+    // обов'язковим (це і є "обов'язкове завдання" в звіті), причина
+    // обов'язкова тільки якщо відповідь "Ні".
     taskIds.forEach((id) => {
       const done = values[`task_${id}_done`]?.value?.selected_option?.value;
       const reason = values[`task_${id}_reason`]?.value?.value;
@@ -74,13 +77,10 @@ function registerWeeklyReport(app) {
       }
     });
 
-    const extra1Name = values.extra_1_name?.value?.value?.trim();
-    const extra1Hours = values.extra_1_hours?.value?.value;
-    const extra1Minutes = values.extra_1_minutes?.value?.value;
-    if (!extra1Name) errors.extra_1_name = "Це поле обов'язкове";
-    if (!extra1Hours && !extra1Minutes) errors.extra_1_hours = 'Вкажи витрачений час';
-
-    for (let i = 2; i <= extraCount; i += 1) {
+    // Додаткові завдання - повністю необов'язкові. Можна не заповнювати
+    // жодного і відправити звіт (напр. якщо тижня не було активності).
+    // Валідація лише на узгодженість: якщо вписав назву - вкажи і час, і навпаки.
+    for (let i = 1; i <= extraCount; i += 1) {
       const name = values[`extra_${i}_name`]?.value?.value?.trim();
       const h = values[`extra_${i}_hours`]?.value?.value;
       const m = values[`extra_${i}_minutes`]?.value?.value;
@@ -132,6 +132,7 @@ function registerWeeklyReport(app) {
       extraTasks,
       totalHours,
       shortfallHours,
+      responded: true,
       submittedAt: new Date().toISOString()
     };
 
@@ -139,12 +140,12 @@ function registerWeeklyReport(app) {
 
     const shortfallText =
       shortfallHours > 0
-        ? `\nНедопрацьовано: *${shortfallHours} год* (з плану ${WEEKLY_PLAN_HOURS} год)`
+        ? `\nНедопрацьовано: *${formatHoursDisplay(shortfallHours)}* (з плану ${WEEKLY_PLAN_HOURS} год)`
         : '\nПлан виконано повністю ✅';
 
     await client.chat.postMessage({
       channel: body.user.id,
-      text: `Дякую, звіт за тиждень ${formatWeekRangeLabel(weekKey)} записано.\nРазом витрачено: *${totalHours} год*.${shortfallText}`
+      text: `Дякую, звіт за тиждень ${formatWeekRangeLabel(weekKey)} записано.\nРазом витрачено: *${formatHoursDisplay(totalHours)}*.${shortfallText}`
     });
   });
 }
