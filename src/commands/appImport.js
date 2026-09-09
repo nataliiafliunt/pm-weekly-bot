@@ -1,9 +1,8 @@
 const { v4: uuidv4 } = require('uuid');
 const db = require('../db');
 const { buildAppImportModal } = require('../blocks/appImportModal');
+const { DEFAULT_STAGES } = require('../config/defaultStages');
 
-// Шукає співробітника за прізвищем (підрядок у полі name, без урахування регістру).
-// Повертає employee або null, якщо не знайдено, чи '__ambiguous__' якщо збігів декілька.
 function findEmployeeBySurname(employees, surname) {
   const needle = surname.trim().toLowerCase();
   if (!needle) return null;
@@ -30,9 +29,6 @@ function registerAppImport(app) {
     const employees = db.get('employees').value();
     const lines = rawText.split('\n').map((l) => l.trim()).filter(Boolean);
 
-    // Групуємо за ключем: category + '::' + (job || category)
-    // Це реалізує правило: якщо Job порожній - усі такі рядки
-    // об'єднуються в один додаток з назвою категорії.
     const grouped = new Map();
     const notFound = [];
     const ambiguous = [];
@@ -65,11 +61,13 @@ function registerAppImport(app) {
 
     const createdApps = [];
     for (const entry of grouped.values()) {
+      const stages = DEFAULT_STAGES.map((name, idx) => ({ id: uuidv4(), name, order: idx }));
+
       const appRecord = {
         id: uuidv4(),
         name: entry.name,
         category: entry.category,
-        stages: [],
+        stages,
         assignees: Array.from(entry.assignees),
         createdBy: body.user.id,
         createdAt: new Date().toISOString()
@@ -79,7 +77,7 @@ function registerAppImport(app) {
     }
 
     let summary = `Імпортовано додатків: *${createdApps.length}*\n${createdApps.map((n) => `• ${n}`).join('\n')}`;
-    summary += '\n\n_Етапи для кожного додатку ще не задані - додай через /app-set-stages._';
+    summary += '\n\n_Усім проставлено стандартний набір етапів. Змінити для конкретного додатку - /app-set-stages._';
 
     if (notFound.length > 0) {
       summary += `\n\n⚠️ Не знайдено співробітників (додай через /employee-add): ${[...new Set(notFound)].join(', ')}`;
