@@ -1,9 +1,7 @@
-// Строит форму еженедельного отчёта.
-// Для кожного призначеного завдання: Виконано? (так/ні) + години + хвилини + причина.
-// Додаткові завдання (від самого ПМ) з'являються по одному - спочатку тільки
-// перше, кнопка "+ Додати ще завдання" відкриває наступне (максимум 3).
-
 const { formatWeekRangeLabel } = require('../config/dates');
+const { formatHoursDisplay } = require('../utils/parseHours');
+
+const CUSTOM_OPTION_VALUE = '__custom__';
 
 function timeFields(prefix, prefill) {
   return [
@@ -34,7 +32,7 @@ function timeFields(prefix, prefill) {
   ];
 }
 
-function buildWeeklyReportModal(tasks, weekKey, extraCount = 1, prefill = {}) {
+function buildWeeklyReportModal(tasks, weekKey, extraCount = 1, prefill = {}, apps = []) {
   const weekLabel = formatWeekRangeLabel(weekKey);
 
   const blocks = [
@@ -53,7 +51,7 @@ function buildWeeklyReportModal(tasks, weekKey, extraCount = 1, prefill = {}) {
       type: 'section',
       text: {
         type: 'mrkdwn',
-        text: `*Завдання:* ${task.text}\n_План: ${task.hours} год_`
+        text: `*Завдання:* ${task.text}\n_План: ${formatHoursDisplay(task.hours)}_`
       }
     });
     blocks.push({
@@ -99,18 +97,79 @@ function buildWeeklyReportModal(tasks, weekKey, extraCount = 1, prefill = {}) {
     text: { type: 'mrkdwn', text: '*Витрачений час на навчання або розробку цього тижня*' }
   });
 
+  const appOptions = [
+    ...apps.map((a) => ({ text: { type: 'plain_text', text: a.name }, value: a.id })),
+    { text: { type: 'plain_text', text: "Написати своє завдання" }, value: CUSTOM_OPTION_VALUE }
+  ];
+
   for (let i = 1; i <= extraCount; i += 1) {
+    const selectedAppValue = prefill?.[`extra_${i}_app_select`];
+    const selectedApp = apps.find((a) => a.id === selectedAppValue);
+
     blocks.push({
       type: 'input',
-      block_id: `extra_${i}_name`,
+      block_id: `extra_${i}_app_select`,
+      dispatch_action: true,
       optional: true,
-      label: { type: 'plain_text', text: `Завдання ${i}` },
+      label: { type: 'plain_text', text: `Завдання ${i} - WIG PM Bots and Apps або своє` },
       element: {
-        type: 'plain_text_input',
+        type: 'static_select',
         action_id: 'value',
-        initial_value: prefill?.[`extra_${i}_name`] ?? undefined
+        placeholder: { type: 'plain_text', text: 'Оберіть додаток або "Написати своє"' },
+        initial_option: selectedAppValue
+          ? appOptions.find((o) => o.value === selectedAppValue)
+          : undefined,
+        options: appOptions
       }
     });
+
+    if (selectedApp) {
+      const stageOptions = selectedApp.stages.map((s) => ({
+        text: { type: 'plain_text', text: s.name },
+        value: s.id
+      }));
+      const selectedStage = prefill?.[`extra_${i}_stage`];
+
+      blocks.push({
+        type: 'input',
+        block_id: `extra_${i}_stage`,
+        optional: true,
+        label: { type: 'plain_text', text: `На якому етапі зараз "${selectedApp.name}"` },
+        element: {
+          type: 'static_select',
+          action_id: 'value',
+          initial_option: selectedStage
+            ? stageOptions.find((o) => o.value === selectedStage)
+            : undefined,
+          options: stageOptions
+        }
+      });
+
+      blocks.push({
+        type: 'input',
+        block_id: `extra_${i}_paused`,
+        optional: true,
+        label: { type: 'plain_text', text: ' ' },
+        element: {
+          type: 'checkboxes',
+          action_id: 'value',
+          options: [{ text: { type: 'plain_text', text: 'Наразі на паузі' }, value: 'paused' }]
+        }
+      });
+    } else if (selectedAppValue === CUSTOM_OPTION_VALUE || !selectedAppValue) {
+      blocks.push({
+        type: 'input',
+        block_id: `extra_${i}_name`,
+        optional: true,
+        label: { type: 'plain_text', text: 'Що було зроблено' },
+        element: {
+          type: 'plain_text_input',
+          action_id: 'value',
+          initial_value: prefill?.[`extra_${i}_name`] ?? undefined
+        }
+      });
+    }
+
     blocks.push(...timeFields(`extra_${i}`, prefill));
   }
 
@@ -140,4 +199,4 @@ function buildWeeklyReportModal(tasks, weekKey, extraCount = 1, prefill = {}) {
   };
 }
 
-module.exports = { buildWeeklyReportModal };
+module.exports = { buildWeeklyReportModal, CUSTOM_OPTION_VALUE };
