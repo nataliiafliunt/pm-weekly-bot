@@ -142,18 +142,15 @@ function registerTeamReport(app) {
 
     await respond({ text, response_type: 'in_channel' });
 
-    try {
+        try {
       const csv = buildCsv(rowsData, maxPriority, maxExtra);
+      const dm = await client.conversations.open({ users: command.user_id });
       await client.files.uploadV2({
-        channel_id: command.user_id,
+        channel_id: dm.channel.id,
         filename: `zvit_${weekKey}.csv`,
         content: csv,
-        initial_comment: `Детальний звіт по відділу ПМ за тиждень ${weekLabel}`
+        initial_comment: `Детальний звіт по відділу ПМ за тиждень ${weekLabel} (той самий, що і в таблиці вище, файлом)`
       });
     } catch (err) {
       console.error('Не вдалося завантажити файл звіту:', err.message);
     }
-  });
-}
-
-module.exports = { registerTeamReport };
