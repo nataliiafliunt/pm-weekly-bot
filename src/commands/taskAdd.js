@@ -2,9 +2,9 @@ const { v4: uuidv4 } = require('uuid');
 const db = require('../db');
 const { getWeekRange } = require('../config/dates');
 const { buildTaskAddModal } = require('../blocks/taskAddModal');
+const { hoursMinutesToHours } = require('../utils/parseHours');
 
 function registerTaskAdd(app) {
-  // Открывает форму создания задания
   app.command('/task-add', async ({ ack, body, client }) => {
     await ack();
     const employees = db.get('employees').value();
@@ -23,21 +23,20 @@ function registerTaskAdd(app) {
     });
   });
 
-  // Обрабатывает отправку формы создания задания
   app.view('task_add_submit', async ({ ack, view, body, client }) => {
     await ack();
 
     const values = view.state.values;
     const text = values.task_text.value.value;
     const assignee = values.task_assignee.value.selected_option.value;
-    const hours = parseFloat(values.task_hours.value.value) || 0;
+    const hours = hoursMinutesToHours(values.task_hours.value.value, values.task_minutes.value.value);
 
     const week = getWeekRange();
 
     const task = {
       id: uuidv4(),
       text,
-      assignedTo: assignee, // 'all' или slackId конкретного человека
+      assignedTo: assignee,
       hours,
       weekKey: week.key,
       createdBy: body.user.id,
