@@ -115,13 +115,11 @@ function registerWeeklyReport(app) {
       }
     });
 
-    // Кожен призначений додаток - обов'язково етап + час (0/0 = пауза)
+    // Кожен призначений додаток - обов'язково лише етап. Час можна не
+    // вписувати взагалі (порожньо = 0 = пауза), не треба змушувати писати "0" руками.
     myAppIds.forEach((appId) => {
       const stage = values[`wig_${appId}_stage`]?.value?.selected_option?.value;
-      const h = values[`wig_${appId}_hours`]?.value?.value;
-      const m = values[`wig_${appId}_minutes`]?.value?.value;
       if (!stage) errors[`wig_${appId}_stage`] = 'Обери етап';
-      if (!h && !m) errors[`wig_${appId}_hours`] = 'Вкажи, скільки часу витрачено (навіть 0)';
     });
 
     for (let i = 1; i <= simpleExtraCount; i += 1) {
