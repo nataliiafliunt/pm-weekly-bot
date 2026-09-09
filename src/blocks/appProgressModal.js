@@ -21,7 +21,7 @@ function buildAppProgressModalStep1(apps) {
         label: { type: 'plain_text', text: 'Додаток' },
         element: {
           type: 'static_select',
-          action_id: 'value',
+        action_id: 'select_app_action',
           placeholder: { type: 'plain_text', text: 'Оберіть додаток' },
           options
         }
