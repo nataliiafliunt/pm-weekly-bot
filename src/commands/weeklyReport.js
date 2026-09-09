@@ -110,7 +110,6 @@ function registerWeeklyReport(app) {
       }
     });
 
-    // Кожен призначений додаток - обов'язково етап + час (0/0 = пауза)
     myAppIds.forEach((appId) => {
       const stage = values[`wig_${appId}_stage`]?.value?.selected_option?.value;
       const h = values[`wig_${appId}_hours`]?.value?.value;
