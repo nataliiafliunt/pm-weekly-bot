@@ -4,11 +4,11 @@ const { WEEKLY_PLAN_HOURS } = require('../config/planHours');
 const { formatHoursDisplay } = require('../utils/parseHours');
 
 function buildCsv(rows) {
-  const header = ['ПМ', 'Години', 'Недопрацьовані години', "Обов'язкове завдання", 'Причина невиконання'];
+  const header = ['ПМ', 'Години', 'Недопрацьовані години', 'Пріоритетні завдання', 'Причина невиконання'];
   const escape = (v) => `"${String(v).replace(/"/g, '""')}"`;
   const lines = [header.map(escape).join(',')];
   rows.forEach((r) => {
-    lines.push([r.name, r.hoursRaw, r.shortfallRaw, r.mandatory, r.reason].map(escape).join(','));
+    lines.push([r.name, r.hoursRaw, r.shortfallRaw, r.priorityTasksText, r.reason].map(escape).join(','));
   });
   return lines.join('\n');
 }
@@ -22,6 +22,7 @@ function registerTeamReport(app) {
     const weekLabel = formatWeekRangeLabel(weekKey);
 
     const employees = db.get('employees').value();
+    const tasks = db.get('tasks').value();
     const reports = db.get('reports').filter({ weekKey }).value();
 
     let totalShortfall = 0;
@@ -39,7 +40,7 @@ function registerTeamReport(app) {
           hoursDisplay: '-',
           shortfallRaw: WEEKLY_PLAN_HOURS,
           shortfallDisplay: formatHoursDisplay(WEEKLY_PLAN_HOURS),
-          mandatory: '-',
+          priorityTasksText: '-',
           reason: 'Опитування не пройдено',
           responded: false
         });
@@ -50,11 +51,21 @@ function registerTeamReport(app) {
       const shortfall = report.shortfallHours ?? Math.max(0, WEEKLY_PLAN_HOURS - report.totalHours);
       totalShortfall += shortfall;
 
-      let mandatory = '-';
+      // Пріоритетні завдання - ті, що назначені через /task-add (можуть бути
+      // декілька за тиждень). Показуємо кожне окремо зі своїм статусом,
+      // а не одне загальне так/ні.
+      let priorityTasksText = '-';
       let reason = '-';
       if (report.taskResults.length > 0) {
-        const allDone = report.taskResults.every((t) => t.done === 'yes');
-        mandatory = allDone ? 'Так' : 'Ні';
+        priorityTasksText = report.taskResults
+          .map((tr) => {
+            const task = tasks.find((t) => t.id === tr.taskId);
+            const label = task ? task.text : 'Завдання';
+            const shortLabel = label.length > 30 ? label.slice(0, 29) + '…' : label;
+            return `${shortLabel}: ${tr.done === 'yes' ? 'Так' : 'Ні'}`;
+          })
+          .join('; ');
+
         const reasons = report.taskResults
           .filter((t) => t.done === 'no' && t.reason)
           .map((t) => t.reason);
@@ -67,7 +78,7 @@ function registerTeamReport(app) {
         hoursDisplay: formatHoursDisplay(report.totalHours),
         shortfallRaw: shortfall,
         shortfallDisplay: shortfall > 0 ? formatHoursDisplay(shortfall) : '-',
-        mandatory,
+        priorityTasksText,
         reason,
         responded: true
       });
@@ -79,13 +90,13 @@ function registerTeamReport(app) {
     const nameW = 22;
     const hoursW = 14;
     const shortW = 24;
-    const mandW = 22;
+    const prioW = 34;
 
     const pad = (s, w) => String(s).padEnd(w);
-    const header = `${pad('ПМ', nameW)} ${pad('Години', hoursW)} ${pad('Недопрацьовані години', shortW)} ${pad("Обов'язкове завдання", mandW)} Причина невиконання`;
+    const header = `${pad('ПМ', nameW)} ${pad('Години', hoursW)} ${pad('Недопрацьовані години', shortW)} ${pad('Пріоритетні завдання', prioW)} Причина невиконання`;
 
     const lines = rowsData.map((r) => {
-      return `${pad(r.name, nameW)} ${pad(r.hoursDisplay, hoursW)} ${pad(r.shortfallDisplay, shortW)} ${pad(r.mandatory, mandW)} ${r.reason}`;
+      return `${pad(r.name, nameW)} ${pad(r.hoursDisplay, hoursW)} ${pad(r.shortfallDisplay, shortW)} ${pad(r.priorityTasksText, prioW)} ${r.reason}`;
     });
 
     const text =
@@ -99,10 +110,12 @@ function registerTeamReport(app) {
 
     await respond({ text, response_type: 'in_channel' });
 
+    // Файл шлемо в особисті тому, хто викликав команду (не в канал -
+    // бот може не мати прав вантажити файли прямо в довільний канал).
     try {
       const csv = buildCsv(rowsData);
       await client.files.uploadV2({
-        channel_id: command.channel_id,
+        channel_id: command.user_id,
         filename: `zvit_${weekKey}.csv`,
         content: csv,
         initial_comment: `Звіт за тиждень ${weekLabel} у форматі файлу`
