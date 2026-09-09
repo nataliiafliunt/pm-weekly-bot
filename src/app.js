@@ -8,6 +8,7 @@ const { registerTeamReport } = require('./commands/teamReport');
 const { registerAppAdd } = require('./commands/appAdd');
 const { registerAppImport } = require('./commands/appImport');
 const { registerAppSetStages } = require('./commands/appSetStages');
+const { registerAppSetDefaultStages } = require('./commands/appSetDefaultStages');
 const { registerAppProgress } = require('./commands/appProgress');
 const { registerAppList } = require('./commands/appList');
 const { startScheduler } = require('./scheduler');
@@ -27,6 +28,7 @@ registerTeamReport(app);
 registerAppAdd(app);
 registerAppImport(app);
 registerAppSetStages(app);
+registerAppSetDefaultStages(app);
 registerAppProgress(app);
 registerAppList(app);
 
