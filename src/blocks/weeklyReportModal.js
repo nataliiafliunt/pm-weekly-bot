@@ -103,7 +103,7 @@ function buildWeeklyReportModal(tasks, weekKey, extraCount = 1, prefill = {}) {
     blocks.push({
       type: 'input',
       block_id: `extra_${i}_name`,
-      optional: i !== 1,
+      optional: true,
       label: { type: 'plain_text', text: `Завдання ${i}` },
       element: {
         type: 'plain_text_input',
