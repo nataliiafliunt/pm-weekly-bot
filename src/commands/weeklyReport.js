@@ -1,9 +1,9 @@
 const { v4: uuidv4 } = require('uuid');
 const db = require('../db');
-const { buildWeeklyReportModal, CUSTOM_OPTION_VALUE } = require('../blocks/weeklyReportModal');
+const { buildWeeklyReportModal, WIG_NONE_VALUE } = require('../blocks/weeklyReportModal');
 const { hoursMinutesToHours, formatHoursDisplay } = require('../utils/parseHours');
 const { WEEKLY_PLAN_HOURS } = require('../config/planHours');
-const { formatWeekRangeLabel } = require('../config/dates');
+const { formatWeekRangeLabel, getWeekRange } = require('../config/dates');
 
 function extractPrefill(values) {
   const prefill = {};
@@ -19,12 +19,26 @@ function extractPrefill(values) {
   return prefill;
 }
 
+// Завдання діє в цьому тижні, якщо його діапазон [startDate, endDate]
+// перетинається з тижнем [weekStart, weekEnd]. Для старих завдань без цих
+// полів - фолбек на weekKey (як було раніше, тільки той тиждень).
+function isTaskActiveThisWeek(task, weekKey) {
+  const weekStart = new Date(weekKey);
+  const weekEnd = new Date(weekStart);
+  weekEnd.setDate(weekStart.getDate() + 6);
+
+  const taskStart = new Date(task.startDate || task.weekKey);
+  const taskEnd = new Date(task.endDate || task.startDate || task.weekKey);
+
+  return taskStart <= weekEnd && taskEnd >= weekStart;
+}
+
 function getTasksFor(slackId, weekKey) {
   return db
     .get('tasks')
     .filter(
       (t) =>
-        t.weekKey === weekKey &&
+        isTaskActiveThisWeek(t, weekKey) &&
         (t.assignedTo === 'all' ||
           (Array.isArray(t.assignedTo) && t.assignedTo.includes(slackId)))
     )
@@ -41,7 +55,7 @@ function registerWeeklyReport(app) {
 
     await client.views.open({
       trigger_id: body.trigger_id,
-      view: buildWeeklyReportModal(tasks, weekKey, 1, {}, apps)
+      view: buildWeeklyReportModal(tasks, weekKey, 0, {}, apps)
     });
   });
 
@@ -49,19 +63,22 @@ function registerWeeklyReport(app) {
     await ack();
 
     const meta = JSON.parse(body.view.private_metadata || '{}');
-    const newExtraCount = Math.min((meta.extraCount || 1) + 1, 3);
+    const newCount = Math.min((meta.simpleExtraCount || 0) + 1, 2);
     const prefill = extractPrefill(body.view.state.values);
-    const tasks = getTasksFor(body.user.id, meta.weekKey);
+    const week = getWeekRange();
+    const tasks = getTasksFor(body.user.id, meta.weekKey || week.key);
     const apps = db.get('apps').value();
 
     await client.views.update({
       view_id: body.view.id,
       hash: body.view.hash,
-      view: buildWeeklyReportModal(tasks, meta.weekKey, newExtraCount, prefill, apps)
+      view: buildWeeklyReportModal(tasks, meta.weekKey, newCount, prefill, apps)
     });
   });
 
-  app.action({ action_id: 'value', block_id: /^extra_\d+_app_select$/ }, async ({ ack, body, client }) => {
+  // Вибір додатку у WIG PM Bots and Apps - перебудовуємо модалку, щоб
+  // показати етап/пауза/час саме для цього додатку.
+  app.action('wig_app_select', async ({ ack, body, client }) => {
     await ack();
 
     const meta = JSON.parse(body.view.private_metadata || '{}');
@@ -72,7 +89,7 @@ function registerWeeklyReport(app) {
     await client.views.update({
       view_id: body.view.id,
       hash: body.view.hash,
-      view: buildWeeklyReportModal(tasks, meta.weekKey, meta.extraCount || 1, prefill, apps)
+      view: buildWeeklyReportModal(tasks, meta.weekKey, meta.simpleExtraCount || 0, prefill, apps)
     });
   });
 
@@ -80,39 +97,49 @@ function registerWeeklyReport(app) {
     const values = view.state.values;
     const meta = JSON.parse(view.private_metadata || '{}');
     const taskIds = meta.taskIds || [];
-    const extraCount = meta.extraCount || 1;
+    const simpleExtraCount = meta.simpleExtraCount || 0;
     const weekKey = meta.weekKey;
 
     const errors = {};
 
+    // Пріоритетні завдання - виконано? обов'язково, причина обов'язкова
+    // якщо "ні", і ЧАС ТЕПЕР ОБОВ'ЯЗКОВИЙ (потрібно точно знати, скільки пішло часу).
     taskIds.forEach((id) => {
       const done = values[`task_${id}_done`]?.value?.selected_option?.value;
       const reason = values[`task_${id}_reason`]?.value?.value;
-      if (done === 'no' && (!reason || reason.trim() === '')) {
-        errors[`task_${id}_reason`] = 'Вкажи причину, чому завдання не виконано';
-      }
+      const h = values[`task_${id}_hours`]?.value?.value;
+      const m = values[`task_${id}_minutes`]?.value?.value;
+
       if (!done) {
         errors[`task_${id}_done`] = "Обери, виконано завдання чи ні";
       }
+      if (done === 'no' && (!reason || reason.trim() === '')) {
+        errors[`task_${id}_reason`] = 'Вкажи причину, чому завдання не виконано';
+      }
+      if (!h && !m) {
+        errors[`task_${id}_hours`] = 'Вкажи, скільки часу витрачено (навіть 0)';
+      }
     });
 
-    const apps = db.get('apps').value();
+    // WIG PM Bots and Apps - обов'язковий вибір
+    const wigValue = values.wig_app_select?.value?.selected_option?.value;
+    if (!wigValue) {
+      errors.wig_app_select = "Обери додаток або познач, що не працював(ла) над додатками";
+    } else if (wigValue !== WIG_NONE_VALUE) {
+      const stage = values.wig_stage?.value?.selected_option?.value;
+      const wh = values.wig_hours?.value?.value;
+      const wm = values.wig_minutes?.value?.value;
+      if (!stage) errors.wig_stage = 'Обери етап';
+      if (!wh && !wm) errors.wig_hours = 'Вкажи, скільки часу витрачено';
+    }
 
-    for (let i = 1; i <= extraCount; i += 1) {
-      const appSelectValue = values[`extra_${i}_app_select`]?.value?.selected_option?.value;
+    // Прості додаткові завдання - повністю необов'язкові, але узгоджені
+    for (let i = 1; i <= simpleExtraCount; i += 1) {
+      const name = values[`extra_${i}_name`]?.value?.value?.trim();
       const h = values[`extra_${i}_hours`]?.value?.value;
       const m = values[`extra_${i}_minutes`]?.value?.value;
-      const hasTime = h || m;
-
-      if (appSelectValue && appSelectValue !== CUSTOM_OPTION_VALUE) {
-        const stage = values[`extra_${i}_stage`]?.value?.selected_option?.value;
-        if (!stage) errors[`extra_${i}_stage`] = 'Обери етап для цього додатку';
-      } else if (appSelectValue === CUSTOM_OPTION_VALUE) {
-        const name = values[`extra_${i}_name`]?.value?.value?.trim();
-        if (!name) errors[`extra_${i}_name`] = 'Вкажи назву завдання';
-      } else if (hasTime) {
-        errors[`extra_${i}_app_select`] = 'Обери додаток або "Написати своє"';
-      }
+      if (name && !h && !m) errors[`extra_${i}_hours`] = 'Вкажи витрачений час для цього завдання';
+      if (!name && (h || m)) errors[`extra_${i}_name`] = 'Вкажи назву завдання';
     }
 
     if (Object.keys(errors).length > 0) {
@@ -122,7 +149,9 @@ function registerWeeklyReport(app) {
 
     await ack();
 
+    const apps = db.get('apps').value();
     let totalHours = 0;
+
     const taskResults = taskIds.map((id) => {
       const done = values[`task_${id}_done`].value.selected_option.value;
       const hours = hoursMinutesToHours(
@@ -135,46 +164,49 @@ function registerWeeklyReport(app) {
     });
 
     const extraTasks = [];
-    for (let i = 1; i <= extraCount; i += 1) {
-      const appSelectValue = values[`extra_${i}_app_select`]?.value?.selected_option?.value;
-      if (!appSelectValue) continue;
 
+    // WIG PM Bots and Apps
+    if (wigValue !== WIG_NONE_VALUE) {
+      const appRecord = apps.find((a) => a.id === wigValue);
+      const stageId = values.wig_stage.value.selected_option.value;
+      const stage = appRecord?.stages.find((s) => s.id === stageId);
+      const paused = (values.wig_paused?.value?.selected_options || []).length > 0;
+      const hours = hoursMinutesToHours(
+        values.wig_hours?.value?.value,
+        values.wig_minutes?.value?.value
+      );
+
+      totalHours += hours;
+      extraTasks.push({
+        name: `${appRecord ? appRecord.name : wigValue} → ${stage ? stage.name : ''}`,
+        hours,
+        appId: wigValue
+      });
+
+      db.get('appProgress')
+        .push({
+          id: uuidv4(),
+          appId: wigValue,
+          stageId,
+          employeeId: body.user.id,
+          note: null,
+          hours,
+          paused,
+          date: new Date().toISOString()
+        })
+        .write();
+    }
+
+    // Прості додаткові завдання
+    for (let i = 1; i <= simpleExtraCount; i += 1) {
+      const name = values[`extra_${i}_name`]?.value?.value?.trim();
+      if (!name) continue;
       const hours = hoursMinutesToHours(
         values[`extra_${i}_hours`]?.value?.value,
         values[`extra_${i}_minutes`]?.value?.value
       );
-
-      if (appSelectValue === CUSTOM_OPTION_VALUE) {
-        const name = values[`extra_${i}_name`]?.value?.value?.trim();
-        if (!name) continue;
-        totalHours += hours;
-        extraTasks.push({ name, hours });
-      } else {
-        const appRecord = apps.find((a) => a.id === appSelectValue);
-        const stageId = values[`extra_${i}_stage`]?.value?.selected_option?.value;
-        const stage = appRecord?.stages.find((s) => s.id === stageId);
-        const paused = (values[`extra_${i}_paused`]?.value?.selected_options || []).length > 0;
-
-        totalHours += hours;
-        extraTasks.push({
-          name: `${appRecord ? appRecord.name : appSelectValue} → ${stage ? stage.name : ''}`,
-          hours,
-          appId: appSelectValue
-        });
-
-        db.get('appProgress')
-          .push({
-            id: uuidv4(),
-            appId: appSelectValue,
-            stageId,
-            employeeId: body.user.id,
-            note: null,
-            hours,
-            paused,
-            date: new Date().toISOString()
-          })
-          .write();
-      }
+      totalHours += hours;
+      extraTasks.push({ name, hours });
     }
 
     totalHours = Math.round(totalHours * 100) / 100;
