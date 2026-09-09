@@ -38,6 +38,8 @@ function registerTaskAdd(app) {
 
     const week = getWeekRange(new Date(startDate));
 
+    const recurrence = values.task_recurrence.value.selected_option.value;
+
     const task = {
       id: uuidv4(),
       text,
@@ -45,6 +47,7 @@ function registerTaskAdd(app) {
       hours,
       startDate,
       endDate,
+      recurrence,
       weekKey: week.key, // залишено для сумісності зі старими звітами
       createdBy: body.user.id,
       createdAt: new Date().toISOString()
