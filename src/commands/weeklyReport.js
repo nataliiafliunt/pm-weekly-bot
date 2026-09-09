@@ -19,15 +19,20 @@ function extractPrefill(values) {
   return prefill;
 }
 
-// Завдання показується РІВНО в одному тижні - тому, де знаходиться дедлайн
-// (endDate). Старт потрібен лише для довідки, не для повторів кожен тиждень.
+// Якщо "weekly" - завдання активне увесь діапазон [startDate, endDate].
+// Якщо "deadline_only" (за замовчуванням) - тільки в тижні, де дедлайн.
 function isTaskActiveThisWeek(task, weekKey) {
   const weekStart = new Date(weekKey);
   const weekEnd = new Date(weekStart);
   weekEnd.setDate(weekStart.getDate() + 6);
 
-  const deadline = new Date(task.endDate || task.startDate || task.weekKey);
+  if (task.recurrence === 'weekly') {
+    const taskStart = new Date(task.startDate || task.weekKey);
+    const taskEnd = new Date(task.endDate || task.startDate || task.weekKey);
+    return taskStart <= weekEnd && taskEnd >= weekStart;
+  }
 
+  const deadline = new Date(task.endDate || task.startDate || task.weekKey);
   return deadline >= weekStart && deadline <= weekEnd;
 }
 
@@ -110,6 +115,7 @@ function registerWeeklyReport(app) {
       }
     });
 
+    // Кожен призначений додаток - обов'язково етап + час (0/0 = пауза)
     myAppIds.forEach((appId) => {
       const stage = values[`wig_${appId}_stage`]?.value?.selected_option?.value;
       const h = values[`wig_${appId}_hours`]?.value?.value;
