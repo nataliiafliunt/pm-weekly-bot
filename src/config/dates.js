@@ -9,27 +9,27 @@ function formatShort(d) {
 function getWeekRange(date = new Date()) {
   const d = new Date(date);
   const day = d.getDay();
-  const diffToMonday = day === 0 ? -6 : 1 - day;
+  const diffToTuesday = (day - 2 + 7) % 7;
 
-  const monday = new Date(d);
-  monday.setDate(d.getDate() + diffToMonday);
-  monday.setHours(0, 0, 0, 0);
+  const tuesday = new Date(d);
+  tuesday.setDate(d.getDate() - diffToTuesday);
+  tuesday.setHours(0, 0, 0, 0);
 
-  const friday = new Date(monday);
-  friday.setDate(monday.getDate() + 4);
+  const nextMonday = new Date(tuesday);
+  nextMonday.setDate(tuesday.getDate() + 6);
 
   return {
-    start: monday,
-    end: friday,
-    key: formatDate(monday)
+    start: tuesday,
+    end: nextMonday,
+    key: formatDate(tuesday)
   };
 }
 
 function formatWeekRangeLabel(weekKey) {
-  const monday = new Date(weekKey);
-  const friday = new Date(monday);
-  friday.setDate(monday.getDate() + 4);
-  return `${formatShort(monday)} - ${formatShort(friday)}`;
+  const start = new Date(weekKey);
+  const end = new Date(start);
+  end.setDate(start.getDate() + 6);
+  return `${formatShort(start)} - ${formatShort(end)}`;
 }
 
 module.exports = { getWeekRange, formatDate, formatWeekRangeLabel };
