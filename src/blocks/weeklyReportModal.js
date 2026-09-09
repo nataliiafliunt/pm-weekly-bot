@@ -151,3 +151,49 @@ function buildWeeklyReportModal(tasks, weekKey, simpleExtraCount = 0, prefill = 
     blocks.push({ type: 'divider' });
     blocks.push({
       type: 'section',
+      text: { type: 'mrkdwn', text: '*Додаткові завдання*' }
+    });
+  }
+
+  for (let i = 1; i <= simpleExtraCount; i += 1) {
+    blocks.push({
+      type: 'input',
+      block_id: `extra_${i}_name`,
+      optional: true,
+      label: { type: 'plain_text', text: `Завдання ${i} - назва` },
+      element: {
+        type: 'plain_text_input',
+        action_id: 'value',
+        initial_value: prefill?.[`extra_${i}_name`] ?? undefined
+      }
+    });
+    blocks.push(...timeFields(`extra_${i}`, prefill));
+  }
+
+  if (simpleExtraCount < 2) {
+    blocks.push({
+      type: 'actions',
+      block_id: 'add_extra_task_block',
+      elements: [
+        {
+          type: 'button',
+          action_id: 'add_extra_task',
+          text: { type: 'plain_text', text: '+ Додати ще завдання' },
+          value: String(simpleExtraCount)
+        }
+      ]
+    });
+  }
+
+  return {
+    type: 'modal',
+    callback_id: 'weekly_report_submit',
+    private_metadata: JSON.stringify({ taskIds: tasks.map((t) => t.id), weekKey, simpleExtraCount }),
+    title: { type: 'plain_text', text: 'Тижневий звіт' },
+    submit: { type: 'plain_text', text: 'Надіслати' },
+    close: { type: 'plain_text', text: 'Скасувати' },
+    blocks
+  };
+}
+
+module.exports = { buildWeeklyReportModal, WIG_NONE_VALUE };
