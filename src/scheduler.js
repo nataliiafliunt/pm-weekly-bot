@@ -2,6 +2,8 @@ const cron = require('node-cron');
 const db = require('./db');
 const { getWeekRange } = require('./config/dates');
 
+// Логіка розсилки опитувальника винесена в окрему функцію,
+// щоб її можна було викликати і за розкладом, і вручну по команді (для тесту).
 async function sendWeeklyReportPrompt(app) {
   const week = getWeekRange();
   const employees = db.get('employees').value();
@@ -39,8 +41,11 @@ async function sendWeeklyReportPrompt(app) {
   }
 }
 
+// По умолчанию - вівторок 15:00 за київським часом. Меняется через .env (WEEKLY_REPORT_CRON)
+// ВАЖЛИВО: явно вказуємо timezone, інакше на хостингу (Railway/Render) сервер
+// працює за UTC, і час у cron буде "з'їжджати" на 2-3 години від київського.
 function startScheduler(app) {
-  const cronExpr = process.env.WEEKLY_REPORT_CRON || '0 15 * * 5';
+  const cronExpr = process.env.WEEKLY_REPORT_CRON || '0 15 * * 2';
   const timezone = process.env.CRON_TIMEZONE || 'Europe/Kyiv';
 
   cron.schedule(cronExpr, () => sendWeeklyReportPrompt(app), { timezone });
