@@ -28,7 +28,8 @@ function registerTaskAdd(app) {
 
     const values = view.state.values;
     const text = values.task_text.value.value;
-    const assignee = values.task_assignee.value.selected_option.value;
+    const selected = values.task_assignee.value.selected_options.map((o) => o.value);
+    const assignee = selected.includes('all') ? 'all' : selected;
     const hours = hoursMinutesToHours(values.task_hours.value.value, values.task_minutes.value.value);
 
     const week = getWeekRange();
@@ -47,7 +48,7 @@ function registerTaskAdd(app) {
 
     const employees = db.get('employees').value();
     const targets =
-      assignee === 'all' ? employees : employees.filter((e) => e.slackId === assignee);
+      assignee === 'all' ? employees : employees.filter((e) => assignee.includes(e.slackId));
 
     for (const emp of targets) {
       try {
