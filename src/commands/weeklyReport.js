@@ -1,9 +1,10 @@
 const { v4: uuidv4 } = require('uuid');
 const db = require('../db');
 const { buildWeeklyReportModal } = require('../blocks/weeklyReportModal');
+const { parseHoursFromText } = require('../utils/parseHours');
+const { WEEKLY_PLAN_HOURS } = require('../config/planHours');
 
 function registerWeeklyReport(app) {
-  // Кнопка "Заповнити звіт" из еженедельного напоминания (см. scheduler.js)
   app.action('open_weekly_report', async ({ ack, body, client }) => {
     await ack();
 
@@ -21,15 +22,14 @@ function registerWeeklyReport(app) {
     });
   });
 
-  // Сабмит формы отчёта
   app.view('weekly_report_submit', async ({ ack, view, body, client }) => {
     const values = view.state.values;
     const meta = JSON.parse(view.private_metadata || '{}');
     const taskIds = meta.taskIds || [];
     const weekKey = meta.weekKey;
 
-    // Валидация: если "Виконано? Ні" - причина обов'язкова
     const errors = {};
+
     taskIds.forEach((id) => {
       const done = values[`task_${id}_done`]?.value?.selected_option?.value;
       const reason = values[`task_${id}_reason`]?.value?.value;
@@ -41,10 +41,16 @@ function registerWeeklyReport(app) {
       }
     });
 
-    // Валидация: "які ще завдання виконані" - обов'язкове поле
-    const extraText = values.extra_tasks_text?.value?.value;
-    if (!extraText || extraText.trim() === '') {
-      errors.extra_tasks_text = "Це поле обов'язкове";
+    const extra1Name = values.extra_1_name?.value?.value?.trim();
+    const extra1Hours = values.extra_1_hours?.value?.value?.trim();
+    if (!extra1Name) errors.extra_1_name = "Це поле обов'язкове";
+    if (!extra1Hours) errors.extra_1_hours = "Вкажи витрачений час";
+
+    for (let i = 2; i <= 3; i += 1) {
+      const name = values[`extra_${i}_name`]?.value?.value?.trim();
+      const hours = values[`extra_${i}_hours`]?.value?.value?.trim();
+      if (name && !hours) errors[`extra_${i}_hours`] = 'Вкажи витрачений час для цього завдання';
+      if (!name && hours) errors[`extra_${i}_name`] = 'Вкажи назву завдання';
     }
 
     if (Object.keys(errors).length > 0) {
@@ -54,38 +60,50 @@ function registerWeeklyReport(app) {
 
     await ack();
 
-    // Расчёт часов
     let totalHours = 0;
     const taskResults = taskIds.map((id) => {
       const done = values[`task_${id}_done`].value.selected_option.value;
-      const hours = parseFloat(values[`task_${id}_hours`].value.value) || 0;
+      const hoursText = values[`task_${id}_hours`].value.value;
+      const hours = parseHoursFromText(hoursText);
       const reason = values[`task_${id}_reason`]?.value?.value || null;
       totalHours += hours;
       return { taskId: id, done, hours, reason };
     });
 
-    const extraHours = parseFloat(values.extra_tasks_hours.value.value) || 0;
-    totalHours += extraHours;
-    totalHours = Math.round(totalHours * 10) / 10;
+    const extraTasks = [];
+    for (let i = 1; i <= 3; i += 1) {
+      const name = values[`extra_${i}_name`]?.value?.value?.trim();
+      const hoursText = values[`extra_${i}_hours`]?.value?.value;
+      if (!name) continue;
+      const hours = parseHoursFromText(hoursText);
+      totalHours += hours;
+      extraTasks.push({ name, hours });
+    }
+
+    totalHours = Math.round(totalHours * 100) / 100;
+    const shortfallHours = Math.max(0, Math.round((WEEKLY_PLAN_HOURS - totalHours) * 100) / 100);
 
     const report = {
       id: uuidv4(),
       employeeId: body.user.id,
       weekKey,
       taskResults,
-      extraText,
-      extraHours,
+      extraTasks,
       totalHours,
+      shortfallHours,
       submittedAt: new Date().toISOString()
     };
 
     db.get('reports').push(report).write();
 
-    // Подтверждение с итоговой суммой (Slack не умеет живой расчёт внутри модалки,
-    // поэтому показываем итог сразу после отправки)
+    const shortfallText =
+      shortfallHours > 0
+        ? `\nНедопрацьовано: *${shortfallHours} год* (з плану ${WEEKLY_PLAN_HOURS} год)`
+        : '\nПлан виконано повністю ✅';
+
     await client.chat.postMessage({
       channel: body.user.id,
-      text: `Дякую, звіт за тиждень ${weekKey} записано.\nРазом витрачено: *${totalHours} год*.`
+      text: `Дякую, звіт за тиждень ${weekKey} записано.\nРазом витрачено: *${totalHours} год*.${shortfallText}`
     });
   });
 }
