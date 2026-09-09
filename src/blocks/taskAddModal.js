@@ -4,6 +4,8 @@ function buildTaskAddModal(employees) {
     value: e.slackId
   }));
 
+  const today = new Date().toISOString().slice(0, 10);
+
   return {
     type: 'modal',
     callback_id: 'task_add_submit',
@@ -29,6 +31,28 @@ function buildTaskAddModal(employees) {
             { text: { type: 'plain_text', text: 'Вся команда' }, value: 'all' },
             ...employeeOptions
           ]
+        }
+      },
+      {
+        type: 'input',
+        block_id: 'task_start_date',
+        label: { type: 'plain_text', text: 'Початок' },
+        element: {
+          type: 'datepicker',
+          action_id: 'value',
+          initial_date: today,
+          placeholder: { type: 'plain_text', text: 'Оберіть дату' }
+        }
+      },
+      {
+        type: 'input',
+        block_id: 'task_end_date',
+        optional: true,
+        label: { type: 'plain_text', text: "Кінець дедлайну (якщо порожньо - тільки цей тиждень)" },
+        element: {
+          type: 'datepicker',
+          action_id: 'value',
+          placeholder: { type: 'plain_text', text: 'Оберіть дату' }
         }
       },
       {
