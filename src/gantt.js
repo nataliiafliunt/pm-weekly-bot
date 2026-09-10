@@ -46,7 +46,9 @@ function buildGanttData(db) {
   const today = dayKey(new Date().toISOString());
   const sorted = allKnownDays.concat(today).sort();
   const rangeStart = sorted[0];
-  const rangeEnd = sorted[sorted.length - 1];
+  const minRangeEnd = addDays(today, 60); // завжди тримаємо принаймні 2 місяці наперед
+  const dataRangeEnd = sorted[sorted.length - 1];
+  const rangeEnd = dataRangeEnd > minRangeEnd ? dataRangeEnd : minRangeEnd;
   const totalDays = Math.max(daysBetween(rangeStart, rangeEnd), 1);
 
   const result = apps.map((appRecord) => {
@@ -81,6 +83,8 @@ function buildGanttData(db) {
           stageName: stage ? stage.name : '—',
           color,
           paused: !!info.paused,
+          startOffsetDays: startOffset,
+          lengthDays: Math.max(endOffset - startOffset, 1),
           leftPct: (startOffset / totalDays) * 100,
           widthPct: Math.max(((endOffset - startOffset) / totalDays) * 100, 100 / totalDays),
           employees: Array.from(info.employees).map(employeeName),
@@ -103,6 +107,8 @@ function buildGanttData(db) {
       return {
         stageName: stage ? stage.name : '—',
         color: PLAN_COLOR,
+        startOffsetDays: startOffset,
+        lengthDays: Math.max(endOffset - startOffset, 1),
         leftPct: (startOffset / totalDays) * 100,
         widthPct: Math.max(((endOffset - startOffset) / totalDays) * 100, 100 / totalDays),
         weekKey: p.weekKey
