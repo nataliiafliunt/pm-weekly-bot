@@ -157,11 +157,13 @@ function registerWeeklyReport(app) {
       const appRecord = apps.find((a) => a.id === appId);
       const stageId = values[`wig_${appId}_stage`].value.selected_option.value;
       const stage = appRecord?.stages.find((s) => s.id === stageId);
-      const hours = hoursMinutesToHours(
-        values[`wig_${appId}_hours`]?.value?.value,
-        values[`wig_${appId}_minutes`]?.value?.value
-      );
-      const paused = hours === 0;
+      const paused = (values[`wig_${appId}_paused`]?.value?.selected_options || []).length > 0;
+      const hours = paused
+        ? 0
+        : hoursMinutesToHours(
+            values[`wig_${appId}_hours`]?.value?.value,
+            values[`wig_${appId}_minutes`]?.value?.value
+          );
 
       totalHours += hours;
       extraTasks.push({
