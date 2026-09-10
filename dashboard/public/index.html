@@ -33,6 +33,10 @@
     position: sticky; left: 0; background: #F7F6F3; z-index: 2;
   }
   .row-track { position: relative; height: 24px; }
+  .segment.plan { border: 1px dashed rgba(91,91,91,0.4); }
+  .today-line .today-label {
+    position: absolute; top: -18px; left: 4px; font-size: 10px; color: #6B6A66; white-space: nowrap;
+  }
   .axis { display: flex; margin-left: 180px; margin-bottom: 4px; position: relative; height: 16px; }
   .axis span { position: absolute; font-size: 10px; color: #B4B2A9; transform: translateX(-50%); }
   .today-line { position: absolute; top: 0; bottom: 0; width: 0; border-left: 1.5px dashed #B4B2A9; z-index: 1; }
@@ -42,7 +46,6 @@
     padding-left: 8px; font-size: 11px; font-weight: 500;
     overflow: hidden; white-space: nowrap; border-radius: 6px;
   }
-  .segment.plan { opacity: 0.85; border: 1px dashed rgba(60,52,137,0.4); }
   .segment .people { position: absolute; top: -15px; left: 8px; font-size: 10px; color: #9B9A96; white-space: nowrap; }
 </style>
 </head>
@@ -52,7 +55,7 @@
   <div style="display:flex; gap:16px; margin-bottom:16px; font-size:12px; color:#6B6A66;">
     <span><span style="display:inline-block; width:10px; height:10px; border-radius:3px; background:#E1F5EE; margin-right:4px;"></span>Факт - в роботі</span>
     <span><span style="display:inline-block; width:10px; height:10px; border-radius:3px; background:#FAECE7; margin-right:4px;"></span>Факт - пауза</span>
-    <span><span style="display:inline-block; width:10px; height:10px; border-radius:3px; background:#EEEDFE; border:1px dashed rgba(60,52,137,0.4); margin-right:4px;"></span>План</span>
+    <span><span style="display:inline-block; width:10px; height:10px; border-radius:3px; background:#E9E9E9; border:1px dashed rgba(91,91,91,0.4); margin-right:4px;"></span>План</span>
   </div>
   <div class="scroll-wrap"><div id="content" class="timeline-inner"></div></div>
 
@@ -111,6 +114,8 @@ async function load() {
     }).join('');
   }
 
+  const gridBg = 'background-image: repeating-linear-gradient(to right, rgba(0,0,0,0.07) 0, rgba(0,0,0,0.07) 1px, transparent 1px, transparent ' + DAY_WIDTH + 'px);';
+
   let html = axisHtml;
 
   for (const [category, apps] of Object.entries(byCategory)) {
@@ -121,14 +126,14 @@ async function load() {
         ? '<div style="font-size:11px; color:#9B9A96; font-weight:400;">' + escapeHtml(app.assignees.join(', ')) + '</div>'
         : '';
       html += '<div class="row"><div class="row-name">' + escapeHtml(app.name) + assigneesText + '</div>' +
-        '<div class="row-track" style="width:' + timelineWidthPx + 'px;">' + renderSegments(app.segments, '') + '</div></div>';
+        '<div class="row-track" style="width:' + timelineWidthPx + 'px; ' + gridBg + '">' + renderSegments(app.segments, '') + '</div></div>';
       html += '<div class="row"><div class="row-sublabel">План</div>' +
-        '<div class="row-track" style="width:' + timelineWidthPx + 'px;">' + renderSegments(app.planSegments || [], 'plan') + '</div></div>';
+        '<div class="row-track" style="width:' + timelineWidthPx + 'px; ' + gridBg + '">' + renderSegments(app.planSegments || [], 'plan') + '</div></div>';
       html += '</div>';
     });
   }
 
-  html += '<div class="today-line" style="left:' + (180 + todayPx) + 'px; top:0; bottom:0;"></div>';
+  html += '<div class="today-line" style="left:' + (180 + todayPx) + 'px; top:0; bottom:0;"><span class="today-label">Сьогодні</span></div>';
 
   content.innerHTML = html;
 }
