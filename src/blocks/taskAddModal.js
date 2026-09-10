@@ -28,7 +28,7 @@ function buildTaskAddModal(employees) {
           action_id: 'value',
           placeholder: { type: 'plain_text', text: 'Оберіть одного чи декількох' },
           options: [
-            { text: { type: 'plain_text', text: 'Вся команда' }, value: 'all' },
+            { text: { type: 'plain_text', text: 'Всі ПМ' }, value: 'all' },
             ...employeeOptions
           ]
         }
@@ -75,25 +75,23 @@ function buildTaskAddModal(employees) {
       {
         type: 'input',
         block_id: 'task_hours',
-        label: { type: 'plain_text', text: 'Орієнтовно, годин' },
+        label: { type: 'plain_text', text: 'Орієнтовно, годин (якщо відомо)' },
         optional: true,
         element: {
           type: 'number_input',
           action_id: 'value',
-          is_decimal_allowed: false,
-          initial_value: '0'
+          is_decimal_allowed: false
         }
       },
       {
         type: 'input',
         block_id: 'task_minutes',
-        label: { type: 'plain_text', text: 'Орієнтовно, хвилин' },
+        label: { type: 'plain_text', text: 'Орієнтовно, хвилин (якщо відомо)' },
         optional: true,
         element: {
           type: 'number_input',
           action_id: 'value',
-          is_decimal_allowed: false,
-          initial_value: '30'
+          is_decimal_allowed: false
         }
       }
     ]
