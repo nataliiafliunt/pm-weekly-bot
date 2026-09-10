@@ -92,12 +92,10 @@ async function load() {
   const todayOffsetDays = Math.round((new Date(today) - new Date(data.rangeStart)) / 86400000);
   const todayPx = todayOffsetDays * DAY_WIDTH;
 
-  // Підпис "Сьогодні" вбудований прямо в ось дат (гарантовано видимий рядок,
-  // на відміну від плаваючого підпису над контентом, який міг обрізатись).
-  axisHtml = axisHtml.replace(
-    '</div>',
-    '<span style="left:' + todayPx + 'px; color:#2D6CDF; font-weight:600;">Сьогодні</span></div>'
-  );
+  // Окрема строка для підпису "Сьогодні" - НЕ в один рядок з датами,
+  // щоб текст не наїжджав, коли сьогодні близько до початку діапазону.
+  const todayLabelRow = '<div style="position:relative; margin-left:180px; height:14px; margin-bottom:2px;">' +
+    '<span style="position:absolute; left:' + todayPx + 'px; font-size:10px; color:#2D6CDF; font-weight:600; transform:translateX(-50%); white-space:nowrap;">▲ Сьогодні</span></div>';
 
   const byCategory = {};
   data.apps.forEach(app => {
@@ -122,7 +120,7 @@ async function load() {
 
   const gridBg = 'background-image: repeating-linear-gradient(to right, rgba(0,0,0,0.07) 0, rgba(0,0,0,0.07) 1px, transparent 1px, transparent ' + DAY_WIDTH + 'px);';
 
-  let html = axisHtml;
+  let html = axisHtml + todayLabelRow;
 
   for (const [category, apps] of Object.entries(byCategory)) {
     html += '<div class="category-label">' + escapeHtml(category) + '</div>';
