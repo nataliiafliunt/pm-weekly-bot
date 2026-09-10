@@ -1,6 +1,6 @@
 const { v4: uuidv4 } = require('uuid');
 const db = require('../db');
-const { buildWeeklyReportModal } = require('../blocks/weeklyReportModal');
+const { buildWeeklyReportModal, PAUSE_VALUE } = require('../blocks/weeklyReportModal');
 const { hoursMinutesToHours, formatHoursDisplay } = require('../utils/parseHours');
 const { WEEKLY_PLAN_HOURS } = require('../config/planHours');
 const { formatWeekRangeLabel, getWeekRange } = require('../config/dates');
@@ -155,19 +155,35 @@ function registerWeeklyReport(app) {
 
     myAppIds.forEach((appId) => {
       const appRecord = apps.find((a) => a.id === appId);
-      const stageId = values[`wig_${appId}_stage`].value.selected_option.value;
+      const selectedStageValue = values[`wig_${appId}_stage`].value.selected_option.value;
+
+      let stageId = selectedStageValue;
+      let paused = false;
+      let hours;
+
+      if (selectedStageValue === PAUSE_VALUE) {
+        paused = true;
+        hours = 0;
+        // Пауза - беремо етап з останнього відомого запису по цьому додатку,
+        // щоб на дашборді лишився правильний етап, просто зафарбований червоним.
+        const lastEntry = db
+          .get('appProgress')
+          .filter((p) => p.appId === appId)
+          .value()
+          .sort((a, b) => (a.date > b.date ? -1 : 1))[0];
+        stageId = lastEntry ? lastEntry.stageId : null;
+      } else {
+        hours = hoursMinutesToHours(
+          values[`wig_${appId}_hours`]?.value?.value,
+          values[`wig_${appId}_minutes`]?.value?.value
+        );
+      }
+
       const stage = appRecord?.stages.find((s) => s.id === stageId);
-      const paused = (values[`wig_${appId}_paused`]?.value?.selected_options || []).length > 0;
-      const hours = paused
-        ? 0
-        : hoursMinutesToHours(
-            values[`wig_${appId}_hours`]?.value?.value,
-            values[`wig_${appId}_minutes`]?.value?.value
-          );
 
       totalHours += hours;
       extraTasks.push({
-        name: `${appRecord ? appRecord.name : appId} → ${stage ? stage.name : ''}`,
+        name: `${appRecord ? appRecord.name : appId} → ${paused ? 'Пауза' : stage ? stage.name : ''}`,
         hours,
         appId
       });
