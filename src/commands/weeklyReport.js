@@ -197,6 +197,7 @@ function registerWeeklyReport(app) {
           note: null,
           hours,
           paused,
+          weekKey, // тиждень, ЗА ЯКИЙ звіт, а не дата відправки форми
           date: new Date().toISOString()
         })
         .write();
