@@ -39,9 +39,15 @@ function buildGanttData(db) {
     };
   }
 
-  const actualDays = allProgress.map((p) => dayKey(p.date));
+  const actualWeekStarts = allProgress.map((p) => p.weekKey || dayKey(p.date));
+  const actualWeekEnds = actualWeekStarts.map((wk) => addDays(wk, 6));
   const planWeekEnds = allPlans.map((p) => addDays(p.weekKey, 6));
-  const allKnownDays = [...actualDays, ...allPlans.map((p) => p.weekKey), ...planWeekEnds];
+  const allKnownDays = [
+    ...actualWeekStarts,
+    ...actualWeekEnds,
+    ...allPlans.map((p) => p.weekKey),
+    ...planWeekEnds
+  ];
 
   const today = dayKey(new Date().toISOString());
   const sorted = allKnownDays.concat(today).sort();
@@ -52,33 +58,31 @@ function buildGanttData(db) {
   const totalDays = Math.max(daysBetween(rangeStart, rangeEnd), 1);
 
   const result = apps.map((appRecord) => {
-    // ---- Факт (як і раніше) ----
+    // ---- Факт - тепер ОДИН СЕГМЕНТ НА ТИЖДЕНЬ (та сама логіка, що і план),
+    // а не по дням. Якщо звіт "за цей тиждень" - полоса займає весь тиждень,
+    // а не лише день, коли форму реально відправили.
     const entries = allProgress
       .filter((p) => p.appId === appRecord.id)
       .sort((a, b) => (a.date > b.date ? 1 : -1));
 
     let segments = [];
     if (entries.length > 0) {
-      const byDay = {};
+      const byWeek = {};
       entries.forEach((e) => {
-        const d = dayKey(e.date);
-        if (!byDay[d]) byDay[d] = { stageId: e.stageId, paused: e.paused, employees: new Set() };
-        byDay[d].stageId = e.stageId;
-        byDay[d].paused = e.paused;
-        byDay[d].employees.add(e.employeeId);
+        const wk = e.weekKey || dayKey(e.date); // фолбек для старих записів без weekKey
+        if (!byWeek[wk]) byWeek[wk] = { stageId: e.stageId, paused: e.paused, employees: new Set() };
+        byWeek[wk].stageId = e.stageId;
+        byWeek[wk].paused = e.paused;
+        byWeek[wk].employees.add(e.employeeId);
       });
 
-      const days = Object.keys(byDay).sort();
-      segments = days.map((day, idx) => {
-        const info = byDay[day];
-        // ВАЖЛИВО: останній сегмент факту тягнеться тільки до "сьогодні",
-        // а не до кінця всього діапазону (який тепер включає майбутні
-        // місяці для плану) - інакше факт виглядав би так, ніби додаток
-        // "в роботі" аж до листопада, хоча відповідь була лише за один тиждень.
-        const nextDay = idx + 1 < days.length ? days[idx + 1] : today;
+      const weeks = Object.keys(byWeek).sort();
+      segments = weeks.map((wk) => {
+        const info = byWeek[wk];
+        const weekEnd = addDays(wk, 6);
 
-        const startOffset = daysBetween(rangeStart, day);
-        const endOffset = Math.max(daysBetween(rangeStart, nextDay), startOffset + 1);
+        const startOffset = daysBetween(rangeStart, wk);
+        const endOffset = daysBetween(rangeStart, weekEnd) + 1;
 
         const stage = appRecord.stages.find((s) => s.id === info.stageId);
         const color = info.paused ? RED : GREEN;
@@ -92,7 +96,7 @@ function buildGanttData(db) {
           leftPct: (startOffset / totalDays) * 100,
           widthPct: Math.max(((endOffset - startOffset) / totalDays) * 100, 100 / totalDays),
           employees: Array.from(info.employees).map(employeeName),
-          startDay: day
+          weekKey: wk
         };
       });
     }
