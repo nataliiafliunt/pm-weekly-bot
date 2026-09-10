@@ -18,6 +18,6 @@ if (!fs.existsSync(dataDir)) {
 const adapter = new FileSync(path.join(dataDir, 'db.json'));
 const db = low(adapter);
 
-db.defaults({ employees: [], tasks: [], reports: [], apps: [], appProgress: [] }).write();
+db.defaults({ employees: [], tasks: [], reports: [], apps: [], appProgress: [], appPlan: [] }).write();
 
 module.exports = db;
