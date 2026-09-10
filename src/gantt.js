@@ -5,7 +5,7 @@
 
 const GREEN = { bg: '#E1F5EE', text: '#085041' };
 const RED = { bg: '#FAECE7', text: '#9B2B0E' };
-const PLAN_COLOR = { bg: '#EEEDFE', text: '#3C3489' };
+const PLAN_COLOR = { bg: '#E9E9E9', text: '#5B5B5B' };
 
 function dayKey(isoDate) {
   return isoDate.slice(0, 10);
@@ -71,7 +71,11 @@ function buildGanttData(db) {
       const days = Object.keys(byDay).sort();
       segments = days.map((day, idx) => {
         const info = byDay[day];
-        const nextDay = idx + 1 < days.length ? days[idx + 1] : rangeEnd;
+        // ВАЖЛИВО: останній сегмент факту тягнеться тільки до "сьогодні",
+        // а не до кінця всього діапазону (який тепер включає майбутні
+        // місяці для плану) - інакше факт виглядав би так, ніби додаток
+        // "в роботі" аж до листопада, хоча відповідь була лише за один тиждень.
+        const nextDay = idx + 1 < days.length ? days[idx + 1] : today;
 
         const startOffset = daysBetween(rangeStart, day);
         const endOffset = Math.max(daysBetween(rangeStart, nextDay), startOffset + 1);
