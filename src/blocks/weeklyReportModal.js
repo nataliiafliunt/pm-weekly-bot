@@ -9,6 +9,8 @@
 const { formatWeekRangeLabel } = require('../config/dates');
 const { formatHoursDisplay } = require('../utils/parseHours');
 
+const PAUSE_VALUE = '__pause__';
+
 function timeFields(prefix, prefill) {
   return [
     {
@@ -107,10 +109,13 @@ function buildWeeklyReportModal(tasks, weekKey, simpleExtraCount = 0, prefill = 
     });
 
     myApps.forEach((app) => {
-      const stageOptions = app.stages.map((s) => ({
-        text: { type: 'plain_text', text: s.name },
-        value: s.id
-      }));
+      const stageOptions = [
+        ...app.stages.map((s) => ({
+          text: { type: 'plain_text', text: s.name },
+          value: s.id
+        })),
+        { text: { type: 'plain_text', text: 'Пауза' }, value: PAUSE_VALUE }
+      ];
       const selectedStage = prefill?.[`wig_${app.id}_stage`];
 
       blocks.push({
@@ -131,10 +136,6 @@ function buildWeeklyReportModal(tasks, weekKey, simpleExtraCount = 0, prefill = 
       blocks.push(...timeFields(`wig_${app.id}`, prefill));
     });
 
-    blocks.push({
-      type: 'context',
-      elements: [{ type: 'mrkdwn', text: '_0 годин 0 хвилин = додаток на паузі цього тижня_' }]
-    });
   }
 
   // ---- Прості додаткові завдання ----
@@ -151,7 +152,6 @@ function buildWeeklyReportModal(tasks, weekKey, simpleExtraCount = 0, prefill = 
       element: {
         type: 'plain_text_input',
         action_id: 'value',
-        placeholder: { type: 'plain_text', text: 'Опиши завдання' },
         initial_value: prefill?.[`extra_${i}_name`] ?? undefined
       }
     });
@@ -189,4 +189,4 @@ function buildWeeklyReportModal(tasks, weekKey, simpleExtraCount = 0, prefill = 
   };
 }
 
-module.exports = { buildWeeklyReportModal };
+module.exports = { buildWeeklyReportModal, PAUSE_VALUE };
