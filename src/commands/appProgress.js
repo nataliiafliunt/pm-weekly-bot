@@ -1,5 +1,6 @@
 const { v4: uuidv4 } = require('uuid');
 const db = require('../db');
+const { getWeekRange } = require('../config/dates');
 const {
   buildAppProgressModalStep1,
   buildAppProgressModalStep2
@@ -76,6 +77,7 @@ function registerAppProgress(app) {
       note,
       hours,
       paused,
+      weekKey: getWeekRange(new Date()).key,
       date: new Date().toISOString()
     };
 
