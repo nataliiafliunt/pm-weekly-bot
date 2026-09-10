@@ -14,6 +14,7 @@ const { registerAppList } = require('./commands/appList');
 const { registerAppAssign } = require('./commands/appAssign');
 const { registerTaskList } = require('./commands/taskList');
 const { registerTaskDelete } = require('./commands/taskDelete');
+const { registerAppPlan } = require('./commands/appPlan');
 const { registerTestWeeklyReport } = require('./commands/testWeeklyReport');
 const { startScheduler } = require('./scheduler');
 const { startDashboard } = require('./dashboardServer');
@@ -38,6 +39,7 @@ registerAppList(app);
 registerAppAssign(app);
 registerTaskList(app);
 registerTaskDelete(app);
+registerAppPlan(app);
 registerTestWeeklyReport(app);
 
 (async () => {
