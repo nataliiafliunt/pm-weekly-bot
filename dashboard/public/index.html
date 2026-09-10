@@ -18,17 +18,25 @@
   .category-label {
     font-size: 12px; color: #9B9A96; font-weight: 500;
     text-transform: uppercase; letter-spacing: 0.03em;
-    margin: 20px 0 8px;
+    margin: 20px 0 8px; position: sticky; left: 0;
   }
+  .scroll-wrap { overflow-x: auto; padding-bottom: 8px; }
+  .timeline-inner { position: relative; }
   .app-block { margin-bottom: 4px; }
   .row { display: flex; align-items: center; min-height: 30px; }
-  .row-name { width: 180px; padding-right: 12px; font-size: 13px; font-weight: 500; flex-shrink: 0; line-height: 1.4; padding-top: 4px; }
-  .row-sublabel { width: 180px; padding-right: 12px; font-size: 11px; color: #B4B2A9; flex-shrink: 0; }
-  .row-track { flex: 1; position: relative; height: 24px; }
+  .row-name {
+    width: 180px; padding-right: 12px; font-size: 13px; font-weight: 500; flex-shrink: 0;
+    line-height: 1.4; padding-top: 4px; position: sticky; left: 0; background: #F7F6F3; z-index: 2;
+  }
+  .row-sublabel {
+    width: 180px; padding-right: 12px; font-size: 11px; color: #B4B2A9; flex-shrink: 0;
+    position: sticky; left: 0; background: #F7F6F3; z-index: 2;
+  }
+  .row-track { position: relative; height: 24px; }
   .axis { display: flex; margin-left: 180px; margin-bottom: 4px; position: relative; height: 16px; }
   .axis span { position: absolute; font-size: 10px; color: #B4B2A9; transform: translateX(-50%); }
   .today-line { position: absolute; top: 0; bottom: 0; width: 0; border-left: 1.5px dashed #B4B2A9; z-index: 1; }
-  .grid-wrap { position: relative; }
+  .grid-wrap { position: relative; margin-left: 180px; }
   .segment {
     position: absolute; height: 100%; display: flex; align-items: center;
     padding-left: 8px; font-size: 11px; font-weight: 500;
@@ -46,9 +54,11 @@
     <span><span style="display:inline-block; width:10px; height:10px; border-radius:3px; background:#FAECE7; margin-right:4px;"></span>Факт - пауза</span>
     <span><span style="display:inline-block; width:10px; height:10px; border-radius:3px; background:#EEEDFE; border:1px dashed rgba(60,52,137,0.4); margin-right:4px;"></span>План</span>
   </div>
-  <div id="content"></div>
+  <div class="scroll-wrap"><div id="content" class="timeline-inner"></div></div>
 
 <script>
+const DAY_WIDTH = 28; // px - фіксований розмір одного дня, не залежить від кількості даних
+
 async function load() {
   const res = await fetch('/api/gantt');
   const data = await res.json();
@@ -63,20 +73,22 @@ async function load() {
 
   subtitle.textContent = data.rangeStart + ' — ' + data.rangeEnd;
 
-  const step = Math.max(Math.ceil(data.totalDays / 20), 1);
-  let axisHtml = '<div class="axis">';
+  const timelineWidthPx = data.totalDays * DAY_WIDTH;
+  const step = 2; // підпис раз на 2 дні - при 28px на день цього достатньо, щоб не злипалось
+
+  let axisHtml = '<div class="axis" style="width:' + (180 + timelineWidthPx) + 'px;">';
   for (let d = 0; d <= data.totalDays; d += step) {
-    const pct = (d / data.totalDays) * 100;
+    const px = d * DAY_WIDTH;
     const date = new Date(data.rangeStart);
     date.setDate(date.getDate() + d);
     const label = String(date.getDate()).padStart(2, '0') + '.' + String(date.getMonth() + 1).padStart(2, '0');
-    axisHtml += '<span style="left:' + pct + '%">' + label + '</span>';
+    axisHtml += '<span style="left:' + px + 'px">' + label + '</span>';
   }
   axisHtml += '</div>';
 
   const today = new Date().toISOString().slice(0, 10);
-  const todayOffset = Math.round((new Date(today) - new Date(data.rangeStart)) / 86400000);
-  const todayPct = (todayOffset / data.totalDays) * 100;
+  const todayOffsetDays = Math.round((new Date(today) - new Date(data.rangeStart)) / 86400000);
+  const todayPx = todayOffsetDays * DAY_WIDTH;
 
   const byCategory = {};
   data.apps.forEach(app => {
@@ -86,10 +98,12 @@ async function load() {
 
   function renderSegments(segments, extraClass) {
     if (segments.length === 0) {
-      return '<div style="color:#B4B2A9; font-size:12px;">—</div>';
+      return '<div style="color:#B4B2A9; font-size:12px; padding-left:4px;">—</div>';
     }
     return segments.map((seg) => {
-      return '<div class="segment ' + extraClass + '" style="left:' + seg.leftPct + '%; width:' + seg.widthPct + '%; ' +
+      const left = seg.startOffsetDays * DAY_WIDTH;
+      const width = Math.max(seg.lengthDays * DAY_WIDTH - 2, DAY_WIDTH - 2);
+      return '<div class="segment ' + extraClass + '" style="left:' + left + 'px; width:' + width + 'px; ' +
         'background:' + seg.color.bg + '; color:' + seg.color.text + ';">' +
         escapeHtml(seg.stageName) +
         (seg.employees && seg.employees.length ? '<div class="people">' + escapeHtml(seg.employees.join(', ')) + '</div>' : '') +
@@ -97,8 +111,7 @@ async function load() {
     }).join('');
   }
 
-  let html = axisHtml + '<div class="grid-wrap">' +
-    '<div class="today-line" style="left:' + todayPct + '%;"></div>';
+  let html = axisHtml;
 
   for (const [category, apps] of Object.entries(byCategory)) {
     html += '<div class="category-label">' + escapeHtml(category) + '</div>';
@@ -107,14 +120,15 @@ async function load() {
       const assigneesText = (app.assignees || []).length
         ? '<div style="font-size:11px; color:#9B9A96; font-weight:400;">' + escapeHtml(app.assignees.join(', ')) + '</div>'
         : '';
-      html += '<div class="row"><div class="row-name">' + escapeHtml(app.name) + assigneesText + '</div><div class="row-track">' +
-        renderSegments(app.segments, '') + '</div></div>';
-      html += '<div class="row"><div class="row-sublabel">План</div><div class="row-track">' +
-        renderSegments(app.planSegments || [], 'plan') + '</div></div>';
+      html += '<div class="row"><div class="row-name">' + escapeHtml(app.name) + assigneesText + '</div>' +
+        '<div class="row-track" style="width:' + timelineWidthPx + 'px;">' + renderSegments(app.segments, '') + '</div></div>';
+      html += '<div class="row"><div class="row-sublabel">План</div>' +
+        '<div class="row-track" style="width:' + timelineWidthPx + 'px;">' + renderSegments(app.planSegments || [], 'plan') + '</div></div>';
       html += '</div>';
     });
   }
-  html += '</div>';
+
+  html += '<div class="today-line" style="left:' + (180 + todayPx) + 'px; top:0; bottom:0;"></div>';
 
   content.innerHTML = html;
 }
