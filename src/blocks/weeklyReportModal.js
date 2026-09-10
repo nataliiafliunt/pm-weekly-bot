@@ -56,11 +56,12 @@ function buildWeeklyReportModal(tasks, weekKey, simpleExtraCount = 0, prefill = 
 
   tasks.forEach((task) => {
     blocks.push({ type: 'divider' });
+    const planText = task.hours > 0 ? `\n_Розрахована кількість часу: ${formatHoursDisplay(task.hours)}_` : '';
     blocks.push({
       type: 'section',
       text: {
         type: 'mrkdwn',
-        text: `*Пріоритетне завдання:* ${task.text}\n_Розрахована кількість часу: ${formatHoursDisplay(task.hours)}_`
+        text: `*Пріоритетне завдання:* ${task.text}${planText}`
       }
     });
     blocks.push({
